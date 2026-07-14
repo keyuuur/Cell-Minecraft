@@ -71,6 +71,7 @@ Record the handoff-checkpoint commit, upstream branch, and deployment URL after 
 - `npm run check`: passed formatting, lint, TypeScript, 36 Vitest/component/API tests, and production build.
 - Production build: passed. Main UI bundle was 248.18 kB minified / 76.36 kB gzip; lazy Babylon bundle was 1,442.19 kB / 333.62 kB gzip.
 - Browser suite: 11/11 scenarios passed in isolated desktop Chromium and 11/11 passed in isolated emulated iPad WebKit. Coverage includes full mission, reload recovery, production-safe tooling, manual queue/retry, cross-student online queue replay, permanent rejection recovery, early submission, drought sequence, touch layout, accommodation settings, and active-attempt recovery.
+- GitHub Actions run `29308606509`: passed both the quality/build job and the full Chromium + iPad-WebKit browser job on the pushed implementation checkpoint. This run is the remote CI evidence for the application code.
 - Visual inspection: tutorial practice and the iPad-sized HUD were inspected in a real browser; controls are physical practice actions rather than checklist acknowledgements.
 
 These are desktop/emulation results. They do not satisfy the physical-school-iPad or real-school-network gates.
