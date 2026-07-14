@@ -50,8 +50,8 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
 - Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The implementation and handoff checkpoints were successfully pushed on 2026-07-13.
-- Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration under the `keyur159263-5904's projects` Hobby team. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. A new `codex/build-a-living-cell` push is being used to trigger the real preview.
-- Google backend: Apps Script source and operator runbook are complete, but no live Sheet or Apps Script deployment is verified. The connected Google tool is signed into `keyur159263@gmail.com`; the requested `PatelK07@gmail.com` account is not present in Chrome's account chooser. No Sheet was created in the wrong account.
+- Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. The `codex/build-a-living-cell` preview is Ready at `https://cell-minecraft-git-codex-buil-5bd946-keyur159263-5904s-projects.vercel.app`, but Vercel Authentication currently blocks anonymous browsers.
+- Google backend: Apps Script source and operator runbook are complete, but no live Sheet or Apps Script deployment is verified. The requested personal Google account is at its password screen in Chrome; Codex did not enter or inspect a password. No Sheet was created in another account.
 
 Record the handoff-checkpoint commit, upstream branch, and deployment URL after each succeeds.
 
@@ -76,22 +76,31 @@ Record the handoff-checkpoint commit, upstream branch, and deployment URL after 
 
 These are desktop/emulation results. They do not satisfy the physical-school-iPad or real-school-network gates.
 
+### Verified 2026-07-14
+
+- Existing GitHub-to-Vercel integration successfully created the `cell-minecraft` project and a Ready preview from commit `527e317` on `codex/build-a-living-cell`.
+- Signed-in Chrome completed the live identification, real control-practice, Babylon scene-load, timer-start, and mission-HUD flow. Development-only stage controls remained absent even with `?test=1`.
+- Anonymous Chromium and iPad-WebKit reached Vercel login instead of the app. This is a Deployment Protection gate, not an application failure.
+- A project-scoped Vercel automation bypass was created for testing without changing Vercel Authentication or the account's existing shareable link. Its value was not committed or logged.
+- The reusable `E2E_BASE_URL` and environment-only automation-bypass path passed the `@live` production-safe startup test against the protected preview in desktop Chromium and iPad-landscape WebKit: 2/2 passed.
+- Local format, lint, typecheck, 36 tests, and production build pass.
+
 ## 7. Current active phase and exact remaining work
 
 Active phase: **release-readiness checkpoint and external integration**.
 
 Remaining work, in order:
 
-1. When Vercel credentials are available, create and verify a preview; record its URL and live smoke result.
-2. When Google write authorization is available, create the dedicated results Sheet, deploy Apps Script, set the Vercel environment variables, and run synthetic receipt/idempotency/best-result tests.
+1. After the requested Google account sign-in is completed, create the dedicated results Sheet, deploy Apps Script, set the Vercel environment variables, and run synthetic receipt/idempotency/best-result tests.
+2. Separately choose a supervised physical-iPad access route: a shareable link, temporary project access change, or the eventual production URL.
 3. Complete the physical-device and classroom checks in `docs/CLASSROOM_RELEASE_CHECKLIST.md`.
 4. Replace procedural prototype organelles with optimized original glTF prefabs and add optional original audio only after the hard physical-iPad performance gate passes. No audio may carry unique information.
 5. Promote to production only after the external gates pass.
 
 ## 8. Known risks, failures, and blockers
 
-- **Google account/authorization blocker:** the Drive connector is authenticated as `keyur159263@gmail.com`, not the requested results owner. Chrome offers `patelk07@psdr3.org` but does not currently offer `PatelK07@gmail.com`. The requested Gmail account must be added or the intended owner corrected before creating the Sheet. No Sheet, Apps Script deployment, or student submission was created.
-- **Vercel deployment state:** the GitHub integration removed the local-token blocker. The project exists, but `main` contains no application code; the feature-branch preview and live smoke test are still required before this gate passes.
+- **Google account/authorization blocker:** the requested personal Google account is waiting for user-entered authentication in Chrome. No Sheet, Apps Script deployment, or student submission was created.
+- **Vercel student-device access blocker:** the preview is Ready, and protected Playwright testing now passes without making the preview public or replacing the Hobby account's existing share link. A separate supervised access route is still required for the physical school iPad.
 - **Physical-device blocker:** no actual school iPad evidence exists for load time, sustained 30 FPS, simultaneous move/look/interact, orientation/background recovery, Low mode, or 20-minute WebGL soak.
 - **School-network blocker:** school Wi-Fi load time and live Apps Script receipt behavior are unverified.
 - **Classroom-evidence blocker:** the 80% independent completion and 70% active-gameplay-time acceptance targets require real student playtesting.

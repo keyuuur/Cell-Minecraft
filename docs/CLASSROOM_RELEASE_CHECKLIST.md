@@ -15,6 +15,8 @@ Use synthetic test identities only until the dedicated teacher-owned results She
 - [ ] Complete a 20-minute soak without a crash or WebGL context loss.
 - [ ] Repeat with large text, high contrast, reduced motion, and mute enabled.
 
+Before the physical test, run the `@live` Playwright gate against the exact Vercel preview URL in both configured browser profiles. Use a local `VERCEL_AUTOMATION_BYPASS_SECRET` so Vercel Authentication can remain enabled. This checks the production-safe identification, tutorial, scene-loading, and mission-start path without exposing development-only stage controls. It does not replace real touch, performance, school-network, orientation, backgrounding, or soak tests.
+
 ## Backend gate — synthetic data only
 
 - [ ] Create a dedicated teacher-owned results spreadsheet.

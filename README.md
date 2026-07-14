@@ -21,6 +21,18 @@ npx playwright install chromium webkit
 npm run test:e2e
 ```
 
+To rerun the production-safe startup flow against a Vercel-protected preview instead of the local server, create a project-scoped **Protection Bypass for Automation** secret in Vercel and keep it only in your local environment:
+
+```powershell
+$env:E2E_BASE_URL="https://your-preview-url.vercel.app"
+$env:VERCEL_AUTOMATION_BYPASS_SECRET="paste-the-test-only-secret-here"
+npx playwright test -g "@live"
+Remove-Item Env:E2E_BASE_URL
+Remove-Item Env:VERCEL_AUTOMATION_BYPASS_SECRET
+```
+
+Never save or commit the bypass secret. This path leaves Vercel Authentication enabled and does not consume or replace the Hobby account's single shareable link.
+
 ## Project boundaries
 
 - Eight required structures only: cell wall, cell membrane, cytoplasm, nucleus, ribosomes, mitochondria, chloroplasts, and large central vacuole.
