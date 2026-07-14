@@ -1,6 +1,6 @@
 # Build a Living Cell — LLM Project Handoff
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 ## 1. Project purpose and classroom audience
 
@@ -50,8 +50,8 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
 - Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The implementation and handoff checkpoints were successfully pushed on 2026-07-13.
-- Vercel: configuration and same-origin `/api/submit` function are present. Preview creation is blocked because this machine has no Vercel login or deployment token.
-- Google backend: Apps Script source and operator runbook are complete, but no live Sheet or Apps Script deployment is verified.
+- Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration under the `keyur159263-5904's projects` Hobby team. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. A new `codex/build-a-living-cell` push is being used to trigger the real preview.
+- Google backend: Apps Script source and operator runbook are complete, but no live Sheet or Apps Script deployment is verified. The connected Google tool is signed into `keyur159263@gmail.com`; the requested `PatelK07@gmail.com` account is not present in Chrome's account chooser. No Sheet was created in the wrong account.
 
 Record the handoff-checkpoint commit, upstream branch, and deployment URL after each succeeds.
 
@@ -90,8 +90,8 @@ Remaining work, in order:
 
 ## 8. Known risks, failures, and blockers
 
-- **Google authorization blocker:** creating the dedicated Sheet failed with `ACCESS_TOKEN_SCOPE_INSUFFICIENT`. Reauthentication with a Google Drive write scope is required. No Sheet, Apps Script deployment, or student submission was created.
-- **Vercel authorization blocker:** `vercel whoami` reported that no credentials exist. A Vercel login or deployment token is required before preview creation; no deployment was created.
+- **Google account/authorization blocker:** the Drive connector is authenticated as `keyur159263@gmail.com`, not the requested results owner. Chrome offers `patelk07@psdr3.org` but does not currently offer `PatelK07@gmail.com`. The requested Gmail account must be added or the intended owner corrected before creating the Sheet. No Sheet, Apps Script deployment, or student submission was created.
+- **Vercel deployment state:** the GitHub integration removed the local-token blocker. The project exists, but `main` contains no application code; the feature-branch preview and live smoke test are still required before this gate passes.
 - **Physical-device blocker:** no actual school iPad evidence exists for load time, sustained 30 FPS, simultaneous move/look/interact, orientation/background recovery, Low mode, or 20-minute WebGL soak.
 - **School-network blocker:** school Wi-Fi load time and live Apps Script receipt behavior are unverified.
 - **Classroom-evidence blocker:** the 80% independent completion and 70% active-gameplay-time acceptance targets require real student playtesting.
