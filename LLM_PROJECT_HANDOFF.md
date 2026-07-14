@@ -42,6 +42,7 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - 2026-07-13: Broad organelle coverage was narrowed to the eight structures in the teacher's Unit 1 boundary.
 - 2026-07-13: Function credit from an Overview checklist was rejected. Evidence now comes from nearby, in-world inspection and visible system changes.
 - 2026-07-13: A submitted grade is now an immutable snapshot. Post-submission practice cannot change the recorded outcome.
+- 2026-07-14: The earlier plan to use a personal Gmail account was superseded. The project has no personal Gmail account; the dedicated Sheet and Apps Script backend are owned by the school-domain Google Workspace account.
 
 ## 5. Verified repository, branch, commit, and deployment state
 
@@ -50,9 +51,10 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
 - Verified release-test checkpoint: `15fe51f` (`Add protected preview verification`).
-- Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The implementation, handoff, and protected-preview checkpoints were successfully pushed through `15fe51f` on 2026-07-14.
-- Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. The protected `codex/build-a-living-cell` preview from `15fe51f` is Ready at `https://cell-minecraft-git-codex-buil-5bd946-keyur159263-5904s-projects.vercel.app` and passed the production-safe startup gate in both configured browser profiles.
-- Google backend: Apps Script source and operator runbook are complete, but no live Sheet or Apps Script deployment is verified. The requested personal Google account is at its password screen in Chrome; Codex did not enter or inspect a password. No Sheet was created in another account.
+- Verified live-backend runtime fix: `a1f01d8` (`fix: load Vercel submission validation at runtime`).
+- Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The live-backend runtime fix was pushed on 2026-07-14. Unrelated local edits to `AGENTS.md` and `KEYUR_WORKFLOW.md` remain outside project commits.
+- Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. The protected `codex/build-a-living-cell` preview from `a1f01d8` is Ready at `https://cell-minecraft-git-codex-buil-5bd946-keyur159263-5904s-projects.vercel.app`. Its Apps Script URL and proxy key are Sensitive, Preview-only environment values; Production was not configured or promoted.
+- Google backend: the school-owned Sheet `Build a Living Cell - Results` is private to the owner and contains only `RawSubmissions` and `BestResults`. The matching Apps Script backend is deployed as a web app that executes as the owner and accepts anonymous requests while enforcing the proxy key and payload validation. No Google Sheet ID, Apps Script deployment URL, proxy key, account credentials, or other backend secret is stored in this handoff.
 
 Record the handoff-checkpoint commit, upstream branch, and deployment URL after each succeeds.
 
@@ -87,6 +89,11 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 - Local format, lint, typecheck, 36 tests, and production build pass.
 - GitHub Actions run `29338255839` passed both the quality/build job and the complete local-server browser job for `15fe51f`.
 - After the fresh `15fe51f` Vercel deployment reached Ready, the protected `@live` test passed again in both configured browser profiles: 2/2 passed.
+- The first live `/api/submit` check exposed an ESM runtime import failure in Vercel. Adding the required `.js` extension to the validation-module import fixed the first broken boundary; the full local gate then passed again: formatting, lint, typecheck, 36/36 tests, and production build.
+- GitHub pushed `a1f01d8`; the connected Vercel project automatically produced a Ready Preview deployment from that commit.
+- GitHub Actions run `29344698527` passed for `a1f01d8`.
+- Live synthetic accepted/idempotency test passed through Preview `/api/submit` -> Apps Script -> private Sheet. The first request returned HTTP 200 with an accepted receipt. Repeating the same `attemptId` returned the original accepted receipt and server timestamp.
+- Sheet verification showed one 18-column raw data row, score 100, and `IsTest=TRUE`. `BestResults` remained header-only with zero data rows, proving that the Preview-forced test flag and test-row exclusion worked. No real student data was submitted.
 
 ## 7. Current active phase and exact remaining work
 
@@ -94,21 +101,23 @@ Active phase: **release-readiness checkpoint and external integration**.
 
 Remaining work, in order:
 
-1. After the requested Google account sign-in is completed, create the dedicated results Sheet, deploy Apps Script, set the Vercel environment variables, and run synthetic receipt/idempotency/best-result tests.
-2. Separately choose a supervised physical-iPad access route: a shareable link, temporary project access change, or the eventual production URL.
-3. Complete the physical-device and classroom checks in `docs/CLASSROOM_RELEASE_CHECKLIST.md`.
-4. Replace procedural prototype organelles with optimized original glTF prefabs and add optional original audio only after the hard physical-iPad performance gate passes. No audio may carry unique information.
-5. Promote to production only after the external gates pass.
+1. Run the remaining live negative/resilience cases before real-student use: rejected payload, queued replay after a transient transport failure, and concurrent duplicate attempts. Accepted receipt, duplicate idempotency, one-row persistence, and test-row exclusion are already verified live.
+2. Choose a supervised physical-iPad access route: a shareable link, temporary project access change, or the eventual production URL.
+3. Complete the physical-device, school-network, and classroom checks in `docs/CLASSROOM_RELEASE_CHECKLIST.md`.
+4. Resolve the shared-iPad privacy question for pending submissions: the queue must retain enough identity to deliver an offline attempt, but a new student must not see or inherit the prior student's identity or submission state.
+5. Replace procedural prototype organelles with optimized original glTF prefabs and add optional original audio only after the hard physical-iPad performance gate passes. No audio may carry unique information.
+6. Promote to production only after the external gates pass.
 
 ## 8. Known risks, failures, and blockers
 
-- **Google account/authorization blocker:** the requested personal Google account is waiting for user-entered authentication in Chrome. No Sheet, Apps Script deployment, or student submission was created.
+- **Live backend residual gate:** private Sheet creation, Apps Script deployment, Preview configuration, accepted receipt, duplicate idempotency, and test-row exclusion are verified. Live rejected/retry/concurrency cases remain before real-student use.
 - **Vercel student-device access blocker:** the preview is Ready, and protected Playwright testing now passes without making the preview public or replacing the Hobby account's existing share link. A separate supervised access route is still required for the physical school iPad.
 - **Physical-device blocker:** no actual school iPad evidence exists for load time, sustained 30 FPS, simultaneous move/look/interact, orientation/background recovery, Low mode, or 20-minute WebGL soak.
 - **School-network blocker:** school Wi-Fi load time and live Apps Script receipt behavior are unverified.
 - **Classroom-evidence blocker:** the 80% independent completion and 70% active-gameplay-time acceptance targets require real student playtesting.
 - **Payload risk:** Babylon is isolated in a lazy bundle but remains the largest download. Low mode and real-device evidence are mandatory before release.
 - **Rate limiting:** Apps Script rate limiting is best effort, not an authentication boundary. Assignment tokens remain routing data rather than secrets.
+- **Shared-iPad privacy risk:** a pending delivery necessarily preserves the earlier attempt payload, including its student identity, until a receipt arrives. Before classroom use, verify that starting a new student session cannot display or attach that prior identity while background delivery continues.
 - **Asset gate:** current visuals are original, efficient procedural low-poly assets. Optimized original glTF prefabs and optional audio remain a post-device-gate release task.
 
 ## 9. Swarm review findings and coordinator decisions
@@ -134,12 +143,13 @@ Final re-gate results:
 - **Biology/learning evidence: GO.** All prior learning-evidence findings were resolved. The reviewer found one unreachable legacy bypass method; it was removed before the final checks.
 - **Classroom game fit: GO for code.** The reviewer verified real control practice, spatial function inspection, active-depot guidance, placement feedback, immutable results, practice exit, modal keyboard behavior, and the iPad accommodation matrix. Physical classroom release remains conditional on real-device/network/student evidence.
 - **Technical release: GO for scoped commit/push.** The final cross-student queue flaw was corrected, its requested regression passes in both browser profiles, and the coordinator reran the isolated full browser gate: 22/22 passed. Live backend, Vercel, network, and physical-device gates remain external blockers rather than code blockers.
+- **2026-07-14 backend swarm checkpoint:** Biology/content review found the synthetic payload stayed inside the approved eight-structure Unit 1 scope. Deployment review approved the private school-owned Sheet, Preview-only secrets, and original-receipt idempotency rule. Classroom review approved synthetic-only testing but kept real-student release blocked on the shared-iPad pending-identity risk and physical classroom evidence.
 
 ## 10. Future phase sequence and acceptance gates
 
 1. **Local release candidate:** green checks, browser flows, swarm re-gate, committed and pushed.
 2. **Preview:** live Vercel smoke, production-safe tooling check, and diagnostics.
-3. **Backend:** dedicated Sheet, Apps Script deployment, environment configuration, synthetic accepted/duplicate/rejected/retry checks, and test-row exclusion.
+3. **Backend, core path passed:** dedicated private Sheet, Apps Script deployment, Preview-only environment configuration, synthetic accepted/duplicate checks, one-row persistence, and test-row exclusion. Live rejected/retry/concurrency checks remain.
 4. **Physical device:** oldest available iPad load/soak, typical iPad ≥30 FPS, touch-only simultaneous control, orientation/background/reload recovery, and Low mode.
 5. **Classroom pilot:** ≥80% complete without teacher rescue, ≥70% of time in game actions, drought recovery discoverable, and no names on public/projector surfaces.
 6. **Asset/audio release pass:** optimized original glTF prefabs and optional nonessential original sound, constrained by physical-device measurements.
@@ -151,11 +161,12 @@ Failed gates trigger correction and retest. No user approval is needed between t
 
 - Browser contract: implemented with versioned payloads, identity limits, attempt/session IDs, rubric breakdown, outcome flags, active time, hint data, versions, and `isTest`.
 - IndexedDB: versioned save envelope, migrations, five-second/event autosave, atomic queue preparation, queue replay, diagnostic export, and safe reset.
-- Same-origin Vercel proxy: implemented at `/api/submit`; preview and live Apps Script transport are unverified.
+- Same-origin Vercel proxy: implemented at `/api/submit`; protected Preview-to-Apps-Script transport returned a valid accepted receipt after the ESM import fix.
 - Apps Script: source, validation, idempotency, locking, append-only `RawSubmissions`, derived `BestResults`, duplicate receipt recovery, reconciliation, sanitization, and runbook are implemented.
-- Dedicated Sheet and deployed web app: blocked by missing Google Drive write authorization.
-- Vercel environment values: not configured because no live Apps Script URL/token exists.
-- No real student data has been submitted. All automated payloads are synthetic and marked `isTest=true`.
+- Dedicated Sheet and deployed web app: live under the school-domain owner. The Sheet is private and has only `RawSubmissions` and `BestResults`; the web app executes as the owner and accepts anonymous requests guarded by the proxy key and validation.
+- Vercel environment values: Apps Script URL and proxy key are configured as Sensitive and Preview-only. Production remains unconfigured.
+- Live evidence: one accepted synthetic row, one duplicate retry returning the original receipt without a second row, `IsTest=TRUE`, and zero `BestResults` data rows.
+- No real student data has been submitted. Live and automated payloads are synthetic; Preview forces `isTest=true`.
 
 ## 12. Restart instructions for a new LLM/Codex instance
 
