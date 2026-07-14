@@ -3,7 +3,7 @@ import {
   validatePayloadSize,
   validateSubmission,
   ValidationError,
-} from './validation';
+} from './validation.js';
 import type { SubmissionReceipt } from '../src/types/game';
 
 interface VercelRequest {
