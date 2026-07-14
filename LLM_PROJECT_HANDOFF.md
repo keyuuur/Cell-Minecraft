@@ -49,6 +49,7 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Active local branch: `codex/build-a-living-cell`
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
+- Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The implementation and handoff checkpoints were successfully pushed on 2026-07-13.
 - Vercel: configuration and same-origin `/api/submit` function are present. Preview creation is blocked because this machine has no Vercel login or deployment token.
 - Google backend: Apps Script source and operator runbook are complete, but no live Sheet or Apps Script deployment is verified.
 
@@ -80,12 +81,11 @@ Active phase: **release-readiness checkpoint and external integration**.
 
 Remaining work, in order:
 
-1. Commit and push `codex/build-a-living-cell`.
-2. When Vercel credentials are available, create and verify a preview; record its URL and live smoke result.
-3. When Google write authorization is available, create the dedicated results Sheet, deploy Apps Script, set the Vercel environment variables, and run synthetic receipt/idempotency/best-result tests.
-4. Complete the physical-device and classroom checks in `docs/CLASSROOM_RELEASE_CHECKLIST.md`.
-5. Replace procedural prototype organelles with optimized original glTF prefabs and add optional original audio only after the hard physical-iPad performance gate passes. No audio may carry unique information.
-6. Promote to production only after the external gates pass.
+1. When Vercel credentials are available, create and verify a preview; record its URL and live smoke result.
+2. When Google write authorization is available, create the dedicated results Sheet, deploy Apps Script, set the Vercel environment variables, and run synthetic receipt/idempotency/best-result tests.
+3. Complete the physical-device and classroom checks in `docs/CLASSROOM_RELEASE_CHECKLIST.md`.
+4. Replace procedural prototype organelles with optimized original glTF prefabs and add optional original audio only after the hard physical-iPad performance gate passes. No audio may carry unique information.
+5. Promote to production only after the external gates pass.
 
 ## 8. Known risks, failures, and blockers
 
