@@ -48,11 +48,11 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Repository: `https://github.com/keyuuur/Cell-Minecraft`
 - Active local branch: `codex/build-a-living-cell`
 - Verified base commit: `e968008`
-- Current implementation: complete in the local working tree and awaiting its first implementation commit.
+- Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
 - Vercel: configuration and same-origin `/api/submit` function are present. Preview creation is blocked because this machine has no Vercel login or deployment token.
 - Google backend: Apps Script source and operator runbook are complete, but no live Sheet or Apps Script deployment is verified.
 
-Always replace the working-tree statement above with the actual commit and deployment URL after a successful push/deploy.
+Record the handoff-checkpoint commit, upstream branch, and deployment URL after each succeeds.
 
 ## 6. Completed phases with test evidence
 
