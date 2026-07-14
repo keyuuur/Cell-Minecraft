@@ -49,8 +49,9 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Active local branch: `codex/build-a-living-cell`
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
-- Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The implementation and handoff checkpoints were successfully pushed on 2026-07-13.
-- Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. The `codex/build-a-living-cell` preview is Ready at `https://cell-minecraft-git-codex-buil-5bd946-keyur159263-5904s-projects.vercel.app`, but Vercel Authentication currently blocks anonymous browsers.
+- Verified release-test checkpoint: `15fe51f` (`Add protected preview verification`).
+- Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The implementation, handoff, and protected-preview checkpoints were successfully pushed through `15fe51f` on 2026-07-14.
+- Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. The protected `codex/build-a-living-cell` preview from `15fe51f` is Ready at `https://cell-minecraft-git-codex-buil-5bd946-keyur159263-5904s-projects.vercel.app` and passed the production-safe startup gate in both configured browser profiles.
 - Google backend: Apps Script source and operator runbook are complete, but no live Sheet or Apps Script deployment is verified. The requested personal Google account is at its password screen in Chrome; Codex did not enter or inspect a password. No Sheet was created in another account.
 
 Record the handoff-checkpoint commit, upstream branch, and deployment URL after each succeeds.
@@ -78,12 +79,14 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ### Verified 2026-07-14
 
-- Existing GitHub-to-Vercel integration successfully created the `cell-minecraft` project and a Ready preview from commit `527e317` on `codex/build-a-living-cell`.
+- Existing GitHub-to-Vercel integration successfully created the `cell-minecraft` project and a Ready preview from release-test commit `15fe51f` on `codex/build-a-living-cell`.
 - Signed-in Chrome completed the live identification, real control-practice, Babylon scene-load, timer-start, and mission-HUD flow. Development-only stage controls remained absent even with `?test=1`.
 - Anonymous Chromium and iPad-WebKit reached Vercel login instead of the app. This is a Deployment Protection gate, not an application failure.
 - A project-scoped Vercel automation bypass was created for testing without changing Vercel Authentication or the account's existing shareable link. Its value was not committed or logged.
 - The reusable `E2E_BASE_URL` and environment-only automation-bypass path passed the `@live` production-safe startup test against the protected preview in desktop Chromium and iPad-landscape WebKit: 2/2 passed.
 - Local format, lint, typecheck, 36 tests, and production build pass.
+- GitHub Actions run `29338255839` passed both the quality/build job and the complete local-server browser job for `15fe51f`.
+- After the fresh `15fe51f` Vercel deployment reached Ready, the protected `@live` test passed again in both configured browser profiles: 2/2 passed.
 
 ## 7. Current active phase and exact remaining work
 
