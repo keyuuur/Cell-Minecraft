@@ -3,6 +3,9 @@ dist/
 coverage/
 playwright-report/
 test-results/
+output/playwright/
+output/pdf/
+tmp/pdfs/
 .vercel/
 .clasp.json
 .env
