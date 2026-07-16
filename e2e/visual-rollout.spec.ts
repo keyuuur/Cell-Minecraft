@@ -56,6 +56,7 @@ const accessibilityAudit =
   process.env.VISUAL_HIGH_CONTRAST === 'true' &&
   process.env.VISUAL_REDUCED_MOTION === 'true' &&
   process.env.VISUAL_MUTE === 'true';
+const pass3Diagnostics = visualPass === 'visual-pass-3';
 const defaultYaw = 2.16;
 const recenterPosition: Point2 = { x: -18, z: 10 };
 
@@ -1112,6 +1113,26 @@ test.describe('real-control visual rollout evidence', () => {
     await clickVisibleButton(page, 'Close overview');
 
     await expect(page.getByText(/Cell stable/)).toBeVisible();
+    if (pass3Diagnostics) {
+      await clickVisibleButton(page, 'Hint');
+      await expect(page.getByRole('heading', { name: 'Hint level 1 of 3' })).toBeVisible();
+      await clickVisibleButton(page, 'Make it more specific');
+      await clickVisibleButton(page, 'Make it more specific');
+      await expect(page.getByRole('heading', { name: 'Hint level 3 of 3' })).toBeVisible();
+      await captureDiagnostic(page, diagnosticScreenshots, 'pass-3-hint');
+      await clickVisibleButton(page, 'Use this hint');
+      await expect(page.getByRole('button', { name: /Grade 100%/ })).toBeVisible();
+
+      await clickVisibleButton(page, 'Grade 100%');
+      await expect(page.getByRole('heading', { name: '100%' })).toBeVisible();
+      await captureDiagnostic(page, diagnosticScreenshots, 'pass-3-grade');
+      await clickVisibleButton(page, 'Close grade breakdown');
+
+      await clickVisibleButton(page, 'Pause');
+      await expect(page.getByText('When you resume')).toBeVisible();
+      await captureDiagnostic(page, diagnosticScreenshots, 'pass-3-pause');
+      await clickVisibleButton(page, 'Resume mission');
+    }
     if (accessibilityAudit) {
       await expect(page.getByRole('button', { name: 'Submit final result' })).toBeVisible();
       await assertCriticalTouchLayout(page);
@@ -1144,6 +1165,25 @@ test.describe('real-control visual rollout evidence', () => {
     await expect(page.getByRole('heading', { name: '100%' })).toBeVisible();
     await expect(page.getByText('Result delivered successfully.')).toBeVisible();
     await capture(page, screenshots, 11, 'results-delivered', true);
+    if (pass3Diagnostics) {
+      await expect(page.getByText('This graded result is locked.')).toBeVisible();
+      await clickVisibleButton(page, 'Continue ungraded practice');
+      await expect(page.locator('.timer-card strong')).toHaveText('PRACTICE');
+      await expect(page.locator('.feedback-toast')).toContainText('recorded result is locked');
+      await expect(page.getByText(/Explore or repair the completed cell/)).toBeVisible();
+      await expect(page.getByText(/submit when ready/i)).toHaveCount(0);
+      await captureDiagnostic(page, diagnosticScreenshots, 'pass-3-practice');
+      await clickVisibleButton(page, 'Pause');
+      const practicePause = page.getByRole('dialog', { name: 'Mission paused' });
+      await expect(practicePause.getByText(/Explore or repair the completed cell/)).toBeVisible();
+      await expect(page.getByText(/submit when ready/i)).toHaveCount(0);
+      await clickVisibleButton(page, 'End practice and return to result');
+      await expect(page.getByText('This graded result is locked.')).toBeVisible();
+      await expect(page.getByText('Result delivered successfully.')).toBeVisible();
+      semanticAssertions.push(
+        'objective-aware hints preserved the score and ungraded practice preserved the locked result',
+      );
+    }
     semanticAssertions.push('drought observed, external water restored, recovery verified at 100%');
 
     const allowedConsoleErrors = favicon404Seen
@@ -1155,7 +1195,8 @@ test.describe('real-control visual rollout evidence', () => {
     expect(pageErrors, 'page errors').toEqual([]);
     expect(unallowedConsoleErrors, 'unallowlisted console errors').toEqual([]);
     expect(screenshots).toHaveLength(12);
-    expect(diagnosticScreenshots).toHaveLength(accessibilityAudit ? 4 : 2);
+    const expectedDiagnosticCount = 2 + (accessibilityAudit ? 2 : 0) + (pass3Diagnostics ? 4 : 0);
+    expect(diagnosticScreenshots).toHaveLength(expectedDiagnosticCount);
     expect(submissionCallCount, 'submission request count').toBe(1);
     expect(submissionProbe?.attemptId, 'nonempty transient attempt ID').toBeTruthy();
     expect(submissionProbe?.completed, 'completed submission').toBe(true);

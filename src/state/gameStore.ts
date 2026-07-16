@@ -203,7 +203,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const station = state.nearbyStation;
     const structure = state.nearbyStructure;
-    if (!station && structure) {
+    const stationAlreadyComplete = station
+      ? station === 'waterStation'
+        ? !state.mission.droughtStarted || state.mission.recoveryRestored
+        : station === 'cytoplasm'
+          ? state.mission.cytoplasmEstablished
+          : Boolean(state.mission.collected[station])
+      : false;
+    if (structure && (!station || stationAlreadyComplete)) {
       if (state.mission.functionEvidence[structure]) {
         set({
           mission: withFeedback(
@@ -506,7 +513,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   continuePractice: () =>
     set((state) => ({
       screen: 'mission',
-      mission: { ...state.mission, practice: true, completionLocked: false },
+      mission: {
+        ...state.mission,
+        practice: true,
+        completionLocked: false,
+        lastFeedback: 'Ungraded practice started. Your recorded result is locked.',
+      },
       paused: false,
     })),
   endPractice: () => set({ screen: 'results', paused: false }),

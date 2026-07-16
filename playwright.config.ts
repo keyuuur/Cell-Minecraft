@@ -2,10 +2,14 @@ import { defineConfig, devices } from '@playwright/test';
 
 const externalBaseURL = process.env.E2E_BASE_URL;
 const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-const approvedVercelHosts = new Set([
-  'cell-minecraft.vercel.app',
-  'cell-minecraft-git-codex-buil-5bd946-keyur159263-5904s-projects.vercel.app',
-]);
+const projectPreviewSuffix = '-keyur159263-5904s-projects.vercel.app';
+
+function isApprovedVercelHost(hostname: string): boolean {
+  return (
+    hostname === 'cell-minecraft.vercel.app' ||
+    (hostname.startsWith('cell-minecraft-') && hostname.endsWith(projectPreviewSuffix))
+  );
+}
 
 if (vercelBypassSecret) {
   if (!externalBaseURL) {
@@ -14,7 +18,7 @@ if (vercelBypassSecret) {
 
   const target = new URL(externalBaseURL);
 
-  if (target.protocol !== 'https:' || !approvedVercelHosts.has(target.hostname)) {
+  if (target.protocol !== 'https:' || !isApprovedVercelHost(target.hostname)) {
     throw new Error(
       'The Vercel automation bypass can only be sent to an approved HTTPS Cell Minecraft Vercel host.',
     );

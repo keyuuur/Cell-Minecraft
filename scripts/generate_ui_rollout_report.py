@@ -109,6 +109,26 @@ DIAGNOSTIC_CAPTIONS = {
         "virtual joystick, utilities, hotbar, and contextual controls remain separate and "
         "center-hit-testable.",
     ),
+    "diagnostic-pass-3-pause.png": (
+        "Appendix E. Pause and resume context",
+        "The pause dialog confirms that active time is stopped and repeats the current objective "
+        "so the student can resume without losing the mission thread.",
+    ),
+    "diagnostic-pass-3-hint.png": (
+        "Appendix C. Objective-aware hint",
+        "The third hint level gives an exact action for the current objective, states that hints "
+        "do not deduct points, and avoids a quiz interruption.",
+    ),
+    "diagnostic-pass-3-grade.png": (
+        "Appendix D. Compact grade breakdown",
+        "The checkpoint grade keeps all six rubric categories visible in a consistent in-app "
+        "dialog without changing the scoring rules.",
+    ),
+    "diagnostic-pass-3-practice.png": (
+        "Appendix F. Locked result and ungraded practice",
+        "The mission HUD labels practice as ungraded and confirms that the previously recorded "
+        "result remains locked.",
+    ),
 }
 
 PHASE_LABELS = {

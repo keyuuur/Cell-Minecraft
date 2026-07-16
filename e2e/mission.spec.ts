@@ -239,13 +239,106 @@ test('permanent rejection survives reload with diagnostic recovery', async ({ pa
 });
 
 test('checkpoint submission unlocks only after the boundary checkpoint', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 680 });
   await startMission(page);
   await page.getByRole('button', { name: /Grade 0%/ }).click();
   await expect(page.getByRole('button', { name: 'Submit this grade early' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Close grade breakdown' }).click();
   await page.getByRole('button', { name: 'Advance test stage' }).click();
   await page.getByRole('button', { name: /Grade/ }).click();
-  await expect(page.getByRole('button', { name: 'Submit this grade early' })).toBeVisible();
+  const earlySubmit = page.getByRole('button', { name: 'Submit this grade early' });
+  await expect(earlySubmit).toBeVisible();
+  await earlySubmit.click();
+  await expect(page.getByText('Incomplete rubric categories:')).toBeVisible();
+  await expect(page.getByText(/Activation and functions: \d+ of 20 points/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Keep building' })).toBeVisible();
+  const dialog = page.locator('.modal-panel').filter({
+    has: page.getByText('Incomplete rubric categories:'),
+  });
+  const bounds = await dialog.boundingBox();
+  if (!bounds) throw new Error('Grade dialog was not visible.');
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(680);
+  await page.getByRole('button', { name: 'Keep building' }).click();
+  await expect(earlySubmit).toBeFocused();
+});
+
+test('objective-aware hints progress without changing the grade', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 680 });
+  await startMission(page, true);
+  await page.getByRole('button', { name: 'Hint' }).click();
+  await expect(page.getByText('No point deduction')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hint level 1 of 3' })).toBeVisible();
+  const hintDialog = page.getByRole('dialog', { name: 'Hint level 1 of 3' });
+  await expect(hintDialog.getByText(/Place wall panels outside the cell/)).toBeVisible();
+  await page.getByRole('button', { name: 'Make it more specific' }).click();
+  await expect(page.getByRole('heading', { name: 'Hint level 2 of 3' })).toBeVisible();
+  await page.getByRole('button', { name: 'Make it more specific' }).click();
+  await expect(page.getByRole('heading', { name: 'Hint level 3 of 3' })).toBeVisible();
+  await expect(page.getByText(/Tap Interact now at the Cell wall panels/)).toBeVisible();
+  await page.getByRole('button', { name: 'Use this hint' }).click();
+  await expect(page.getByRole('button', { name: /Grade 0%/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Advance test stage' }).click();
+  await page.getByRole('button', { name: 'Hint' }).click();
+  await expect(page.getByRole('heading', { name: 'Hint level 1 of 3' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close hints' }).click();
+  await expect(page.getByRole('button', { name: 'Hint' })).toBeFocused();
+});
+
+test('results keep the locked grade, delivery, and next actions visible in landscape', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 680 });
+  await page.route('**/api/submit', async (route) => {
+    const body = route.request().postDataJSON() as { attemptId: string };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        attemptId: body.attemptId,
+        status: 'accepted',
+        serverTimestamp: new Date().toISOString(),
+      }),
+    });
+  });
+  await startMission(page, true);
+  await completeMissionWithTools(page);
+  await expect(page.getByText('Stable cell achieved')).toBeVisible();
+  await expect(page.getByText('This graded result is locked.')).toBeVisible();
+  await expect(page.getByText('Result delivered successfully.')).toBeVisible();
+  const freshAttempt = page.getByRole('button', { name: 'Start a fresh graded attempt' });
+  await expect(freshAttempt).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Continue ungraded practice' })).toBeInViewport();
+  const overflow = await page.evaluate(() => ({
+    horizontal: document.documentElement.scrollWidth - window.innerWidth,
+    vertical: document.documentElement.scrollHeight - window.innerHeight,
+  }));
+  expect(overflow.horizontal).toBeLessThanOrEqual(1);
+  expect(overflow.vertical).toBeLessThanOrEqual(1);
+
+  await page.getByRole('button', { name: 'Continue ungraded practice' }).click();
+  await expect(page.getByText('PRACTICE', { exact: true })).toBeVisible();
+  await expect(page.getByText(/recorded result is locked/)).toBeVisible();
+  await expect(page.getByText(/Explore or repair the completed cell/)).toBeVisible();
+  await expect(page.getByText(/submit when ready/i)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Hint' }).click();
+  await page.getByRole('button', { name: 'Make it more specific' }).click();
+  await page.getByRole('button', { name: 'Make it more specific' }).click();
+  await expect(page.getByText(/End practice to return to your locked result/)).toBeVisible();
+  await expect(page.getByText(/Submit final result/)).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close hints' }).click();
+  await page.getByRole('button', { name: 'Overview' }).click();
+  await expect(page.getByRole('button', { name: 'Return to ungraded practice' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /submit final result/i })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Return to ungraded practice' }).click();
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await expect(page.getByText(/Practice is ungraded/)).toBeVisible();
+  const practicePause = page.getByRole('dialog', { name: 'Mission paused' });
+  await expect(practicePause.getByText(/Explore or repair the completed cell/)).toBeVisible();
+  await expect(page.getByText(/submit when ready/i)).toHaveCount(0);
+  await page.getByRole('button', { name: 'End practice and return to result' }).click();
+  await expect(page.getByText('This graded result is locked.')).toBeVisible();
+  await expect(page.getByText('Result delivered successfully.')).toBeVisible();
 });
 
 test('hydrated baseline, drought wilt, and recovery are visibly distinct', async ({ page }) => {

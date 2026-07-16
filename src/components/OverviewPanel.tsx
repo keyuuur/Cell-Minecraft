@@ -23,6 +23,11 @@ export function OverviewPanel({ onClose }: OverviewPanelProps) {
     ...Object.keys(mission.placements),
   ].filter(Boolean) as Array<keyof typeof STRUCTURE_LABELS>;
   const allEffectsObserved = REQUIRED_STRUCTURES.every((id) => mission.functionEvidence[id]);
+  const observedCount = installed.filter((id) => mission.functionEvidence[id]).length;
+  const evidenceSummary =
+    installed.length === 0
+      ? 'No structure effects are available yet.'
+      : `${observedCount} of ${installed.length} installed effects observed`;
 
   return (
     <div className="modal-backdrop" role="presentation">
@@ -32,7 +37,7 @@ export function OverviewPanel({ onClose }: OverviewPanelProps) {
         aria-modal="true"
         aria-labelledby="overview-title"
       >
-        <div className="modal-heading">
+        <div className="modal-heading overview-heading">
           <div>
             <p className="eyebrow">System evidence</p>
             <h2 id="overview-title">Cell overview</h2>
@@ -47,77 +52,108 @@ export function OverviewPanel({ onClose }: OverviewPanelProps) {
             ×
           </button>
         </div>
-        <p>Homeostasis means maintaining a stable internal environment.</p>
-        <div className="overview-status-grid">
-          <div>
-            <strong>Boundary</strong>
-            <span>{status.boundary}% secure</span>
+        <div className="modal-scroll-region">
+          <p className="overview-definition">
+            Homeostasis means maintaining a stable internal environment.
+          </p>
+          <div className="overview-status-grid">
+            <div>
+              <strong>Boundary</strong>
+              <span>{status.boundary}% secure</span>
+            </div>
+            <div>
+              <strong>Observed functions</strong>
+              <span>{status.function}% recorded</span>
+            </div>
+            <div>
+              <strong>Turgor</strong>
+              <span>{status.turgor}% pressure</span>
+            </div>
           </div>
-          <div>
-            <strong>Observed functions</strong>
-            <span>{status.function}% recorded</span>
-          </div>
-          <div>
-            <strong>Turgor</strong>
-            <span>{status.turgor}% pressure</span>
-          </div>
-        </div>
-        {mission.vacuoleHydratedObserved && !mission.droughtStarted && (
-          <div className="system-success" role="status">
-            Baseline: the vacuole is full, turgor is high, and the plant indicator is firm.
-          </div>
-        )}
-        {mission.droughtStarted && !mission.recoveryRestored && (
-          <div className="system-warning" role="status">
-            <strong>Homeostasis challenge</strong>
-            <p>
-              Water is limited. The central vacuole is shrinking, turgor pressure is dropping, and
-              the plant is wilting.
-            </p>
-          </div>
-        )}
-        {mission.recoveryRestored && (
-          <div className="system-success" role="status">
-            Water storage is restored. Turgor pressure increased, and the plant is firm again.
-          </div>
-        )}
-        <ul className="evidence-list function-evidence-list">
-          {installed.map((id) => (
-            <li key={id}>
-              <div>
-                <strong>{STRUCTURE_LABELS[id]}:</strong> {STRUCTURE_FUNCTIONS[id]}
-                {mission.functionEvidence[id] && (
-                  <p className="visible-effect">Visible result: {STRUCTURE_VISIBLE_EFFECTS[id]}</p>
-                )}
-              </div>
-              <span className={mission.functionEvidence[id] ? 'evidence-recorded' : ''}>
-                {mission.functionEvidence[id]
-                  ? 'Effect observed'
-                  : 'Inspect it in the chamber and use Interact'}
+          {mission.vacuoleHydratedObserved && !mission.droughtStarted && (
+            <div className="system-success overview-condition" role="status">
+              <strong>Hydrated baseline</strong>
+              <span>
+                Baseline: the vacuole is full, turgor is high, and the plant indicator is firm.
               </span>
-            </li>
-          ))}
-        </ul>
-        {mission.vacuoleHydratedObserved &&
-          !mission.droughtStarted &&
-          !mission.recoveryRestored && (
-            <button
-              className="primary-button"
-              type="button"
-              disabled={!allEffectsObserved}
-              onClick={() => {
-                beginDroughtChallenge();
-                onClose();
-              }}
-            >
-              {allEffectsObserved
-                ? 'Begin water-availability challenge'
-                : 'Observe all eight effects before the challenge'}
-            </button>
+            </div>
           )}
-        <button className="text-button" type="button" onClick={onClose}>
-          Return to mission
-        </button>
+          {mission.droughtStarted && !mission.recoveryRestored && (
+            <div className="system-warning overview-condition" role="status">
+              <strong>Homeostasis challenge</strong>
+              <span>
+                Water is limited. The central vacuole is shrinking, turgor pressure is dropping, and
+                the plant is wilting.
+              </span>
+            </div>
+          )}
+          {mission.recoveryRestored && (
+            <div className="system-success overview-condition" role="status">
+              <strong>Recovery verified</strong>
+              <span>
+                Water storage is restored. Turgor pressure increased, and the plant is firm again.
+              </span>
+            </div>
+          )}
+          <details className="evidence-details">
+            <summary>{evidenceSummary}</summary>
+            <ul className="evidence-list function-evidence-list">
+              {installed.map((id) => (
+                <li key={id}>
+                  <div>
+                    <strong>{STRUCTURE_LABELS[id]}:</strong> {STRUCTURE_FUNCTIONS[id]}
+                    {mission.functionEvidence[id] && (
+                      <p className="visible-effect">
+                        Visible result: {STRUCTURE_VISIBLE_EFFECTS[id]}
+                      </p>
+                    )}
+                  </div>
+                  <span className={mission.functionEvidence[id] ? 'evidence-recorded' : ''}>
+                    {mission.functionEvidence[id]
+                      ? 'Effect observed'
+                      : 'Inspect it in the chamber and use Interact'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+        <div className="modal-actions overview-actions">
+          {mission.vacuoleHydratedObserved &&
+            !mission.droughtStarted &&
+            !mission.recoveryRestored && (
+              <button
+                className="primary-button"
+                type="button"
+                disabled={!allEffectsObserved}
+                onClick={() => {
+                  beginDroughtChallenge();
+                  onClose();
+                }}
+              >
+                {allEffectsObserved
+                  ? 'Begin water-availability challenge'
+                  : 'Observe all eight effects before the challenge'}
+              </button>
+            )}
+          <button
+            className={
+              mission.droughtStarted || mission.recoveryRestored
+                ? 'primary-button'
+                : 'secondary-button'
+            }
+            type="button"
+            onClick={onClose}
+          >
+            {mission.droughtStarted && !mission.recoveryRestored
+              ? 'Return and find the Water station'
+              : mission.recoveryRestored
+                ? mission.practice
+                  ? 'Return to ungraded practice'
+                  : 'Return and submit final result'
+                : 'Return to mission'}
+          </button>
+        </div>
       </section>
     </div>
   );

@@ -72,6 +72,23 @@ describe('active-time and mission state', () => {
     expect(useGameStore.getState().mission.functionEvidence.cellWall).toBeUndefined();
   });
 
+  it('prioritizes an unobserved structure over an already completed nearby depot', () => {
+    useGameStore.setState((state) => ({
+      mission: {
+        ...state.mission,
+        collected: { ...state.mission.collected, cellMembrane: true },
+      },
+      nearbyStation: 'cellMembrane',
+      nearbyStructure: 'centralVacuole',
+    }));
+    useGameStore.getState().interact();
+    expect(useGameStore.getState().mission.functionEvidence.centralVacuole).toBe(true);
+    expect(useGameStore.getState().mission.lastFeedback).toContain(
+      'central vacuole module observed',
+    );
+    expect(useGameStore.getState().mission.lastFeedback).not.toContain('Collected membrane panels');
+  });
+
   it('requires replacement and reinspection to restore a removed structure function', () => {
     for (let step = 0; step < 3; step += 1) useGameStore.getState().testAdvanceStage();
     useGameStore.setState((state) => ({

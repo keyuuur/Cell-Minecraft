@@ -12,12 +12,6 @@ interface GameHudProps {
   isTestMode: boolean;
 }
 
-const hints = [
-  'Look for the depot whose color and label match the current objective.',
-  'Collect the current module, move into its broad valid zone, then use Place.',
-  'Follow the objective exactly: wall outside membrane, cytoplasm fill, paired structures, central vacuole, then diagnose and restore water.',
-];
-
 export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
   const mission = useGameStore((state) => state.mission);
   const activeElapsedMs = useGameStore((state) => state.activeElapsedMs);
@@ -40,7 +34,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
   const [showOverview, setShowOverview] = useState(false);
   const [showScore, setShowScore] = useState(false);
   const [showHints, setShowHints] = useState(false);
-  const [hintLevel, setHintLevel] = useState(0);
+  const [hintProgress, setHintProgress] = useState({ objective: '', level: 0 });
   const modalTriggerRef = useRef<HTMLElement | null>(null);
   const selectedHotbarRef = useRef<HTMLButtonElement | null>(null);
   const status = statusValues(mission);
@@ -105,6 +99,101 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
       : nearbyStructure && !nearbyFunctionObserved
         ? `Inspect ${STRUCTURE_LABELS[nearbyStructure]}`
         : 'Interact';
+  const objective = mission.practice
+    ? 'Explore or repair the completed cell. Your recorded grade will not change.'
+    : objectiveFor(mission);
+  const hintLevel = hintProgress.objective === objective ? hintProgress.level : 0;
+  const objectiveHints = (() => {
+    if (mission.practice) {
+      return [
+        'Choose any completed structure you want to inspect or repair.',
+        'Use Interact to review a function, or Remove selected and Place to practice a repair.',
+        'Explore the completed cell, then use Pause and End practice to return to your locked result.',
+      ];
+    }
+    if (mission.completed) {
+      return [
+        'Look at the completed objective and the final action controls.',
+        'Your graded cell is stable. The remaining verb is Submit.',
+        'Tap Submit final result to lock this completed attempt.',
+      ];
+    }
+    if (mission.recoveryRestored) {
+      return [
+        'Use the system evidence display to check the recovered cell.',
+        'Open Overview and compare turgor and firmness with the drought state.',
+        'Tap Overview, verify 100% turgor and a firm plant, then return to the chamber.',
+      ];
+    }
+    if (mission.droughtStarted) {
+      if (!mission.droughtObserved) {
+        return [
+          'Look at the system evidence display for the change caused by limited water.',
+          'Open Overview to observe the vacuole, turgor, and plant indicator.',
+          'Tap Overview, read the 25% turgor state, then return to the chamber.',
+        ];
+      }
+      return [
+        'Look for the Water station at the far end of the chamber.',
+        'Move near the Water station until the Interact cue appears.',
+        'At the Water station, tap Interact to restore external water availability.',
+      ];
+    }
+    if (mission.vacuoleHydratedObserved && status.function === 100) {
+      return [
+        'The next system event begins from the evidence display.',
+        'Open Overview and use the water-availability challenge action.',
+        'Tap Overview, then tap Begin water-availability challenge.',
+      ];
+    }
+    if (nearbyStructure && !nearbyFunctionObserved) {
+      return [
+        `Stay near ${STRUCTURE_LABELS[nearbyStructure]} and watch the chamber cue.`,
+        'The required verb is Interact, which records the visible function evidence.',
+        `Tap Interact now to inspect ${STRUCTURE_LABELS[nearbyStructure]}.`,
+      ];
+    }
+    if (selectedItem && placementPreview) {
+      const label = STRUCTURE_LABELS[selectedItem];
+      if (placementPreview.status === 'valid') {
+        return [
+          `Use the highlighted ${placementPreview.zoneLabel}.`,
+          `The zone is valid. The required verb for ${label} is Place.`,
+          `Tap Place ${label} now.`,
+        ];
+      }
+      return [
+        `Follow the labeled ${placementPreview.zoneLabel} guide.`,
+        `Move while carrying ${label} until the guide says VALID ZONE.`,
+        placementPreview.reason,
+      ];
+    }
+    if (nearbyStation && !nearbyStationComplete) {
+      const label =
+        nearbyStation === 'waterStation'
+          ? 'Water station'
+          : nearbyStation === 'cytoplasm'
+            ? 'Cytoplasm supply'
+            : STRUCTURE_LABELS[nearbyStation];
+      return [
+        `Stay near the ${label} and watch for the Interact cue.`,
+        'The required verb is Interact to collect or activate this mission step.',
+        `Tap Interact now at the ${label}.`,
+      ];
+    }
+    if (nextStationLabel) {
+      return [
+        `Look for the raised NEXT label for ${nextStationLabel}.`,
+        `Move to the ${nextStationLabel} supply depot and wait for Nearby to appear.`,
+        `At the ${nextStationLabel} depot, tap Interact, then follow the labeled placement zone.`,
+      ];
+    }
+    return [
+      `Start with the current objective: ${objective}`,
+      'Move until a Nearby or Inspect cue appears, then use the named action.',
+      `Complete this exact step: ${objective}`,
+    ];
+  })();
 
   useEffect(() => {
     sceneRef.current?.setPaused(modalOpen);
@@ -140,11 +229,11 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
       <div className="hud-content" inert={modalOpen ? true : undefined}>
         <header className="hud-top">
           <div className="objective-card">
-            <span>Objective</span>
-            <strong>{objectiveFor(mission)}</strong>
+            <span>{mission.practice ? 'Practice objective' : 'Objective'}</span>
+            <strong>{objective}</strong>
           </div>
           <div className="timer-card" aria-label={`${timer} remaining`}>
-            <span>{mission.practice ? 'Ungraded' : 'Active time'}</span>
+            <span>{mission.practice ? 'Ungraded mode' : 'Active time'}</span>
             <strong>{mission.practice ? 'PRACTICE' : timer}</strong>
           </div>
           <button
@@ -390,18 +479,26 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
             aria-labelledby="hint-title"
           >
             <div className="modal-heading">
-              <h2 id="hint-title">Hint level {hintLevel + 1}</h2>
+              <div>
+                <p className="eyebrow">No point deduction</p>
+                <h2 id="hint-title">Hint level {hintLevel + 1} of 3</h2>
+              </div>
               <button
                 className="icon-button"
                 type="button"
+                aria-label="Close hints"
                 autoFocus
                 onClick={() => setShowHints(false)}
               >
                 ×
               </button>
             </div>
-            <p>{hints[hintLevel]}</p>
-            <div className="button-row">
+            <div className="hint-objective">
+              <strong>Current objective</strong>
+              <span>{objective}</span>
+            </div>
+            <p className="hint-copy">{objectiveHints[hintLevel]}</p>
+            <div className="modal-actions">
               <button
                 className="secondary-button"
                 type="button"
@@ -416,7 +513,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
                 <button
                   className="text-button"
                   type="button"
-                  onClick={() => setHintLevel((value) => value + 1)}
+                  onClick={() => setHintProgress({ objective, level: hintLevel + 1 })}
                 >
                   Make it more specific
                 </button>
@@ -433,24 +530,40 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
             aria-modal="true"
             aria-labelledby="pause-title"
           >
-            <h2 id="pause-title">Mission paused</h2>
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">Timer stopped</p>
+                <h2 id="pause-title">Mission paused</h2>
+              </div>
+            </div>
             <p>The active timer is stopped and held movement has been cleared.</p>
-            <button
-              className="primary-button"
-              type="button"
-              autoFocus
-              onClick={() => {
-                sceneRef.current?.clearInput();
-                setPaused(false);
-              }}
-            >
-              Resume mission
-            </button>
+            <div className="pause-objective">
+              <strong>When you resume</strong>
+              <span>{objective}</span>
+            </div>
             {mission.practice && (
-              <button className="secondary-button" type="button" onClick={endPractice}>
-                End practice and return to result
-              </button>
+              <p className="practice-lock-note">
+                Practice is ungraded. Your recorded result is locked.
+              </p>
             )}
+            <div className="modal-actions">
+              <button
+                className="primary-button"
+                type="button"
+                autoFocus
+                onClick={() => {
+                  sceneRef.current?.clearInput();
+                  setPaused(false);
+                }}
+              >
+                Resume mission
+              </button>
+              {mission.practice && (
+                <button className="secondary-button" type="button" onClick={endPractice}>
+                  End practice and return to result
+                </button>
+              )}
+            </div>
           </section>
         </div>
       )}
