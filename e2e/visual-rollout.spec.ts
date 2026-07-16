@@ -32,6 +32,7 @@ interface SubmissionProbe {
 interface SubmissionReceiptProbe {
   status: string;
   matchesRequest: boolean;
+  serverTimestamp: string;
 }
 
 const runId = process.env.VISUAL_RUN_ID;
@@ -860,6 +861,7 @@ test.describe('real-control visual rollout evidence', () => {
     const consoleErrors: string[] = [];
     let submissionCallCount = 0;
     let submissionProbe: SubmissionProbe | null = null;
+    let transientSubmissionPayload: unknown = null;
     let favicon404Seen = false;
     let graphicsContextChecks = 0;
     let graphicsContextLossEvents = 0;
@@ -898,6 +900,7 @@ test.describe('real-control visual rollout evidence', () => {
         completed?: unknown;
         score?: { total?: unknown };
       };
+      transientSubmissionPayload = body;
       submissionCallCount += 1;
       submissionProbe = {
         attemptId: typeof body.attemptId === 'string' ? body.attemptId : '',
@@ -1215,6 +1218,7 @@ test.describe('real-control visual rollout evidence', () => {
     const receiptBody = (await receiptResponse.json()) as {
       attemptId?: unknown;
       status?: unknown;
+      serverTimestamp?: unknown;
     };
     const submissionReceipt: SubmissionReceiptProbe = {
       status: typeof receiptBody.status === 'string' ? receiptBody.status : '',
@@ -1222,6 +1226,8 @@ test.describe('real-control visual rollout evidence', () => {
         typeof receiptBody.attemptId === 'string' &&
         receiptBody.attemptId.length > 0 &&
         receiptBody.attemptId === submissionProbe?.attemptId,
+      serverTimestamp:
+        typeof receiptBody.serverTimestamp === 'string' ? receiptBody.serverTimestamp : '',
     };
     await expect(page.getByText('Stable cell achieved')).toBeVisible();
     await expect(page.getByRole('heading', { name: '100%' })).toBeVisible();
@@ -1266,9 +1272,36 @@ test.describe('real-control visual rollout evidence', () => {
     if (liveSubmission) expect(submissionProbe?.isTest, 'Preview test flag').toBe(true);
     expect(submissionReceipt?.status, 'accepted receipt status').toBe('accepted');
     expect(submissionReceipt?.matchesRequest, 'receipt matches transient attempt ID').toBe(true);
+    expect(submissionReceipt?.serverTimestamp, 'nonempty server timestamp').toBeTruthy();
     await page.waitForTimeout(1_000);
     expect(submissionCallCount, 'submission request remains exactly one').toBe(1);
     expect(graphicsContextLossEvents, 'WebGL context-loss events').toBe(0);
+
+    if (liveSubmission) {
+      expect(
+        transientSubmissionPayload,
+        'transient submission payload retained in memory',
+      ).toBeTruthy();
+      const duplicateResponse = await page
+        .context()
+        .request.post(new URL('/api/submit', externalBaseURL).toString(), {
+          data: transientSubmissionPayload,
+        });
+      expect(duplicateResponse.ok(), 'duplicate idempotency response').toBe(true);
+      const duplicateReceipt = (await duplicateResponse.json()) as {
+        attemptId?: unknown;
+        status?: unknown;
+        serverTimestamp?: unknown;
+      };
+      expect(duplicateReceipt.attemptId, 'duplicate receipt attempt').toBe(receiptBody.attemptId);
+      expect(duplicateReceipt.status, 'duplicate receipt status').toBe(receiptBody.status);
+      expect(duplicateReceipt.serverTimestamp, 'duplicate receipt timestamp').toBe(
+        receiptBody.serverTimestamp,
+      );
+      semanticAssertions.push(
+        'exact transient payload retry returned the original receipt without a second page submission',
+      );
+    }
 
     const finishedAt = new Date();
     const manifest = {
@@ -1301,6 +1334,7 @@ test.describe('real-control visual rollout evidence', () => {
       submissionMode: liveSubmission ? 'preview-forced-test' : 'intercepted-synthetic',
       submissionOutcome: submissionReceipt.status,
       submissionCallCount,
+      backendIdempotencyGate: liveSubmission ? 'passed-original-receipt' : 'not-applicable',
       graphicsContextGate: {
         status: 'passed',
         checks: graphicsContextChecks,
