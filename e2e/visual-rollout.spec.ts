@@ -1310,7 +1310,9 @@ test.describe('real-control visual rollout evidence', () => {
     expect(submissionProbe?.attemptId, 'nonempty transient attempt ID').toBeTruthy();
     expect(submissionProbe?.completed, 'completed submission').toBe(true);
     expect(submissionProbe?.total, 'submitted score').toBe(100);
-    if (liveSubmission) expect(submissionProbe?.isTest, 'Preview test flag').toBe(true);
+    if (liveSubmission) {
+      expect(submissionProbe?.isTest, 'production-shaped Preview client test flag').toBe(false);
+    }
     expect(submissionReceipt?.status, 'accepted receipt status').toBe('accepted');
     expect(submissionReceipt?.matchesRequest, 'receipt matches transient attempt ID').toBe(true);
     expect(submissionReceipt?.serverTimestamp, 'nonempty server timestamp').toBeTruthy();
@@ -1385,7 +1387,7 @@ test.describe('real-control visual rollout evidence', () => {
       pageErrors,
       consoleErrors: unallowedConsoleErrors,
       allowedConsoleErrors,
-      submissionMode: liveSubmission ? 'preview-forced-test' : 'intercepted-synthetic',
+      submissionMode: liveSubmission ? 'preview-server-forced-test' : 'intercepted-synthetic',
       submissionOutcome: submissionReceipt.status,
       submissionCallCount,
       backendIdempotencyGate: liveSubmission ? 'passed-original-receipt' : 'not-applicable',
