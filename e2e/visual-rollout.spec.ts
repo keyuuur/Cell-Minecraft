@@ -149,7 +149,7 @@ async function holdMovement(
   // exercising the visible touch-only joystick for the entire route.
   while (remaining > 0) {
     const segment = Math.min(1_400, remaining);
-    const joystick = page.getByLabel('Movement joystick');
+    const joystick = page.locator('.virtual-joystick[aria-label="Movement joystick"]');
     const bounds = await joystick.boundingBox();
     if (!bounds) throw new Error('Movement joystick is not visible.');
     const centerX = bounds.x + bounds.width / 2;
@@ -237,7 +237,7 @@ async function moveUntilSemanticLabel(
     for (const key of keys) await page.keyboard.down(key);
     let reached = false;
     try {
-      await semanticLabel.waitFor({ state: 'visible', timeout: 1_000 });
+      await semanticLabel.waitFor({ state: 'visible', timeout: 2_500 });
       reached = true;
     } catch {
       // The stopped late-frame check below covers the 180 ms semantic throttle.
@@ -251,7 +251,7 @@ async function moveUntilSemanticLabel(
       .catch(() => false);
   }
 
-  const joystick = page.getByLabel('Movement joystick');
+  const joystick = page.locator('.virtual-joystick[aria-label="Movement joystick"]');
   const bounds = await joystick.boundingBox();
   if (!bounds) throw new Error('Movement joystick is not visible.');
   const centerX = bounds.x + bounds.width / 2;
@@ -263,7 +263,7 @@ async function moveUntilSemanticLabel(
     await expect(joystick).toHaveClass(/is-active/);
     await page.mouse.move(centerX + localX * 42, centerY - localZ * 42, { steps: 3 });
     try {
-      await semanticLabel.waitFor({ state: 'visible', timeout: 1_000 });
+      await semanticLabel.waitFor({ state: 'visible', timeout: 2_500 });
       reached = true;
     } catch {
       // The stopped late-frame check below covers the 180 ms semantic throttle.
@@ -285,20 +285,12 @@ async function navigateFromRecenter(page: Page, target: Point2, expected: RegExp
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await page.getByRole('button', { name: 'Recenter' }).click();
     await page.waitForTimeout(120);
-    const worldX = target.x - recenterPosition.x;
-    const worldZ = target.z - recenterPosition.z;
-    const distance = Math.hypot(worldX, worldZ);
-    const forwardX = Math.sin(defaultYaw);
-    const forwardZ = Math.cos(defaultYaw);
-    const rightX = Math.cos(defaultYaw);
-    const rightZ = -Math.sin(defaultYaw);
-    const localX = (worldX * rightX + worldZ * rightZ) / distance;
-    const localZ = (worldX * forwardX + worldZ * forwardZ) / distance;
+    await rotateFromRecenter(page, target);
     const semanticLabel = page.locator('.nearby-label').filter({ hasText: expected });
-    // Short, sub-trigger-width joystick segments are independent of render FPS and poll the
-    // same visible HUD signal a student uses. One full recenter retry is allowed.
-    for (let segment = 0; segment < 10; segment += 1) {
-      if (await moveUntilSemanticLabel(page, localX, localZ, semanticLabel)) return;
+    // Bounded joystick holds are independent of render FPS and continuously poll the same
+    // visible HUD signal a student uses. One full recenter retry is allowed.
+    for (let segment = 0; segment < 4; segment += 1) {
+      if (await moveUntilSemanticLabel(page, 0, 1, semanticLabel)) return;
     }
   }
   throw new Error(`Navigation did not reach expected semantic target: ${expected}`);
@@ -409,6 +401,15 @@ async function readVisibleGrade(page: Page): Promise<number> {
   return Number(match[1]);
 }
 
+async function clickVisibleButton(page: Page, name: string): Promise<void> {
+  const button = page.getByRole('button', { name, exact: true });
+  await expect(button).toBeVisible();
+  await expect(button).toBeEnabled();
+  const bounds = await button.boundingBox();
+  if (!bounds) throw new Error(`${name} button has no visible bounds.`);
+  await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+}
+
 async function collectFromDepot(page: Page, id: keyof typeof structureLabels): Promise<void> {
   const label = structureLabels[id];
   if (id === 'cellWall') {
@@ -451,7 +452,7 @@ async function placeCentralVacuole(page: Page): Promise<void> {
   // Recenter's locked heading already crosses the broad central zone. Keeping that heading avoids
   // small drag-look variance while the visible Place feedback determines when to stop.
   for (let attempt = 0; attempt < 22; attempt += 1) {
-    await page.getByRole('button', { name: 'Place' }).click();
+    await clickVisibleButton(page, 'Place');
     await page.waitForTimeout(300);
     const message = (await feedback.textContent()) ?? '';
     if (/installed|Water storage is established/i.test(message)) return;
@@ -477,7 +478,7 @@ async function placeBoundaryPanels(page: Page, id: 'cellWall' | 'cellMembrane'):
 
   let placed = 0;
   for (let attempt = 0; attempt < 16 && placed === 0; attempt += 1) {
-    await page.getByRole('button', { name: 'Place' }).click();
+    await clickVisibleButton(page, 'Place');
     await page.waitForTimeout(260);
     const message = (await feedback.textContent()) ?? '';
     if (successPattern.test(message)) {
@@ -492,7 +493,7 @@ async function placeBoundaryPanels(page: Page, id: 'cellWall' | 'cellMembrane'):
   if (placed === 0) throw new Error(`Visible placement retries did not reach the ${id} zone.`);
 
   while (placed < 6) {
-    await page.getByRole('button', { name: 'Place' }).click();
+    await clickVisibleButton(page, 'Place');
     placed += 1;
   }
 }
@@ -506,6 +507,8 @@ test.describe('real-control visual rollout evidence', () => {
     test.setTimeout(720_000);
     await mkdir(outputDir, { recursive: true });
     await page.setViewportSize({ width: viewportWidth, height: viewportHeight });
+    page.setDefaultTimeout(5_000);
+    page.setDefaultNavigationTimeout(15_000);
 
     const startedAt = new Date();
     const screenshots: ScreenshotEvidence[] = [];
@@ -572,11 +575,20 @@ test.describe('real-control visual rollout evidence', () => {
     await completeControlPractice(page);
     await page.getByRole('button', { name: 'Start mission and timer' }).scrollIntoViewIfNeeded();
     await capture(page, screenshots, 2, 'controls-practice-complete', true);
+    const missionStartClickedAt = Date.now();
     await page.getByRole('button', { name: 'Start mission and timer' }).click();
     await expect(page.getByLabel('Mission controls')).toBeVisible();
-    await expect(page.getByLabel('Movement joystick')).toBeVisible({
-      visible: controlProfile === 'touch-only',
+    await expect(page.getByLabel('Three-dimensional plant cell construction chamber')).toBeVisible({
+      timeout: 10_000,
     });
+    await expect(page.locator('.virtual-joystick[aria-label="Movement joystick"]')).toBeVisible({
+      visible: controlProfile === 'touch-only',
+      timeout: 1_000,
+    });
+    const missionReadyMs = Date.now() - missionStartClickedAt;
+    expect(missionReadyMs, 'mission becomes interactive within ten seconds').toBeLessThanOrEqual(
+      10_000,
+    );
     await assertGraphicsHealthy(page);
     graphicsContextChecks += 1;
     await page.getByRole('button', { name: 'Pause' }).click();
@@ -616,7 +628,7 @@ test.describe('real-control visual rollout evidence', () => {
     ] as const) {
       await collectFromDepot(page, id);
       await navigateFromRecenter(page, placements[id], /Inspect:\s*Cytoplasm/i);
-      await page.getByRole('button', { name: 'Place' }).click();
+      await clickVisibleButton(page, 'Place');
       await expect(page.locator('.feedback-toast')).toContainText('installed');
       await page.waitForTimeout(360);
       await inspectStructure(page, id, functionPercent);
@@ -633,7 +645,7 @@ test.describe('real-control visual rollout evidence', () => {
           gradeBeforeRemoval,
         );
         await selectVisibleHotbarItem(page, 'Nucleus');
-        await page.getByRole('button', { name: 'Place' }).click();
+        await clickVisibleButton(page, 'Place');
         await expect(page.locator('.feedback-toast')).toContainText('installed');
         await page.waitForTimeout(360);
         await inspectStructure(page, 'nucleus', /50%/);
@@ -652,7 +664,7 @@ test.describe('real-control visual rollout evidence', () => {
     ] as const) {
       await collectFromDepot(page, id);
       await navigateFromRecenter(page, placements[id], /Inspect:\s*Cytoplasm/i);
-      await page.getByRole('button', { name: 'Place' }).click();
+      await clickVisibleButton(page, 'Place');
       await expect(page.locator('.feedback-toast')).toContainText('installed');
       await page.waitForTimeout(360);
       await inspectStructure(page, id, functionPercent);
@@ -751,6 +763,7 @@ test.describe('real-control visual rollout evidence', () => {
       engine: `${test.info().project.name} browser emulation`,
       physicalDeviceEvidence: false,
       viewport: { width: viewportWidth, height: viewportHeight },
+      missionReadyMs,
       controls: controlProfile,
       accessibility: {
         largeText: process.env.VISUAL_LARGE_TEXT === 'true',
