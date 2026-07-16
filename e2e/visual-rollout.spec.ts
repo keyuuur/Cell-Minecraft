@@ -35,6 +35,8 @@ interface SubmissionReceiptProbe {
   serverTimestamp: string;
 }
 
+test.use({ trace: 'off' });
+
 const runId = process.env.VISUAL_RUN_ID;
 const visualPass = process.env.VISUAL_PASS ?? 'baseline';
 const externalBaseURL = process.env.E2E_BASE_URL;
@@ -844,7 +846,6 @@ async function placeBoundaryPanels(
 
 test.describe('real-control visual rollout evidence', () => {
   test.skip(!runId, 'Set VISUAL_RUN_ID to execute a counted visual rollout run.');
-  test.use({ trace: 'off' });
 
   test(`Run ${runId ?? 'unset'} reaches a stable cell using only visible controls`, async ({
     page,
