@@ -1172,9 +1172,15 @@ test.describe('real-control visual rollout evidence', () => {
       await captureDiagnostic(page, diagnosticScreenshots, 'accessibility-vacuole-actions');
     }
     await placeCentralVacuole(page);
-    await holdMovement(page, 0, -1, 450);
-    await page.waitForTimeout(360);
-    await expect(page.getByText('Inspect: Large central vacuole')).toBeVisible();
+    const vacuoleInspectLabel = page.getByText('Inspect: Large central vacuole');
+    if (!(await vacuoleInspectLabel.isVisible().catch(() => false))) {
+      await navigateFromRecenter(
+        page,
+        placements.centralVacuole,
+        /Inspect:\s*Large central vacuole/i,
+      );
+    }
+    await expect(vacuoleInspectLabel).toBeVisible();
     await capture(page, screenshots, 7, 'function-inspect-before');
     await inspectStructure(page, 'centralVacuole', /100%/);
     await capture(page, screenshots, 7, 'function-interact-after');
