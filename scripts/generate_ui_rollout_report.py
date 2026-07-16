@@ -117,6 +117,7 @@ PHASE_LABELS = {
     "visual-pass-2": "VISUAL PASS 2 EVIDENCE",
     "visual-pass-3": "VISUAL PASS 3 EVIDENCE",
     "pass-2-candidate": "VISUAL PASS 2 CANDIDATE",
+    "pass-2-validation": "VISUAL PASS 2 VALIDATION",
 }
 
 CHECKPOINT_HIGHLIGHTS = {
@@ -149,6 +150,12 @@ CHECKPOINT_HIGHLIGHTS = {
         "Cumulative structures remain visible through distinct outer wall and inner membrane cues.",
         "Function feedback, drought, wilt, and recovery stay at the approved Unit 1 depth.",
         "Reload, correction, placement, graphics, and exact-one submission gates passed.",
+    ],
+    "pass-2-validation": [
+        "Large text, high contrast, reduced motion, and mute remain usable at 1024 x 680.",
+        "Critical touch targets stay at least 56px with no modal, joystick, or action overlap.",
+        "Contextual action names and the completion layout remain clear through touch controls.",
+        "All mission, correction, graphics, and exact-one submission gates passed.",
     ],
 }
 
