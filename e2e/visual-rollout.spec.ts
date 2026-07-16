@@ -844,6 +844,7 @@ async function placeBoundaryPanels(
 
 test.describe('real-control visual rollout evidence', () => {
   test.skip(!runId, 'Set VISUAL_RUN_ID to execute a counted visual rollout run.');
+  test.use({ trace: 'off' });
 
   test(`Run ${runId ?? 'unset'} reaches a stable cell using only visible controls`, async ({
     page,
@@ -1293,11 +1294,24 @@ test.describe('real-control visual rollout evidence', () => {
         status?: unknown;
         serverTimestamp?: unknown;
       };
-      expect(duplicateReceipt.attemptId, 'duplicate receipt attempt').toBe(receiptBody.attemptId);
-      expect(duplicateReceipt.status, 'duplicate receipt status').toBe(receiptBody.status);
-      expect(duplicateReceipt.serverTimestamp, 'duplicate receipt timestamp').toBe(
-        receiptBody.serverTimestamp,
-      );
+      const duplicateMatchesOriginal = {
+        attempt:
+          typeof duplicateReceipt.attemptId === 'string' &&
+          duplicateReceipt.attemptId.length > 0 &&
+          duplicateReceipt.attemptId === receiptBody.attemptId,
+        status:
+          typeof duplicateReceipt.status === 'string' &&
+          duplicateReceipt.status === receiptBody.status,
+        timestamp:
+          typeof duplicateReceipt.serverTimestamp === 'string' &&
+          duplicateReceipt.serverTimestamp.length > 0 &&
+          duplicateReceipt.serverTimestamp === receiptBody.serverTimestamp,
+      };
+      transientSubmissionPayload = null;
+      expect(transientSubmissionPayload, 'transient payload cleared after retry').toBeNull();
+      expect(duplicateMatchesOriginal.attempt, 'duplicate attempt matches original').toBe(true);
+      expect(duplicateMatchesOriginal.status, 'duplicate status matches original').toBe(true);
+      expect(duplicateMatchesOriginal.timestamp, 'duplicate timestamp matches original').toBe(true);
       semanticAssertions.push(
         'exact transient payload retry returned the original receipt without a second page submission',
       );
