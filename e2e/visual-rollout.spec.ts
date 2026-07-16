@@ -1359,7 +1359,7 @@ test.describe('real-control visual rollout evidence', () => {
       visualPass,
       appBaseSha,
       evidenceSha,
-      target: liveSubmission ? 'protected-preview-emulation' : 'local-emulation',
+      target: protectedPreviewTarget ? 'protected-preview-emulation' : 'local-emulation',
       engine: `${test.info().project.name} browser emulation`,
       physicalDeviceEvidence: false,
       viewport: { width: viewportWidth, height: viewportHeight },
