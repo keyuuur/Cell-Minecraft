@@ -128,15 +128,17 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 - Real-control and semantic gates passed at 100%: visible tutorial practice, Pause/Resume with stable active time, Remove/replace/reinspect with restored full credit, all eight nearby Inspect + Interact function-evidence events, drought observation, external-water restoration, recovery, and visible final submission.
 - Submission and graphics gates passed: exactly one intercepted synthetic request returned an accepted receipt; two explicit WebGL/WebGL2 context checks passed; page-error and console-error lists are empty. Mission-ready time was 3,350 ms.
 - All 12 original PNGs were inspected at original resolution and are usable. The intentionally oversized ribosome remains a known Visual Pass 2 finding rather than a Run 2 evidence defect.
-- Clean stopping boundary: do not rerun or recount Run 2. Its mobile-readable PDF, render-back inspection, independent Run 2 report review, handoff finalization, checkpoint commit/push, and Email 2 remain the first resume actions. Do not begin Visual Pass 2 until those reporting gates complete.
+- The 13-page mobile report `output/pdf/build-a-living-cell-ui-rollout-run-02-visual-pass-1.pdf` was generated from the verified manifest, rendered back to 13 PNGs, and inspected page by page. Text extraction and raw-pixel checks confirmed accurate Run 2 labeling, matching evidence SHA, no clipping, no black-box corruption, and no stale baseline wording. Report SHA-256: `b948646176843b72c86a473904dd7b99e3fbc032e1e12cf0fb7ae18fa87c252e`.
+- Independent Playtest/QA, Student UX/Visual Direction, and Classroom Fit reviewers returned **GO with no mandatory findings**. Their shared later-pass findings are the oversized ribosome, weak distant depot/structure labels, scene wayfinding, and dense Overview layout; these do not invalidate Run 2.
+- Reporting gate: do not rerun or recount Run 2. Commit and push the verified report-generator/handoff checkpoint, send Email 2 once with the verified PDF, confirm the send, and then begin Visual Pass 2. Do not resend Email 1.
 
 ## 7. Current active phase and exact remaining work
 
-Active phase: **Five-Run, Three-Pass Swarm UI Rollout - counted Run 2 reporting checkpoint**.
+Active phase: **Five-Run, Three-Pass Swarm UI Rollout - counted Run 2 report delivery**.
 
 Remaining rollout work, in order:
 
-1. Resume without rerunning Run 2: generate the mobile-readable Run 2 PDF, render it back to PNG, inspect every page, complete the independent report/evidence review, update this handoff if needed, commit/push the report checkpoint, and send Email 2 once. Do not resend Email 1.
+1. Commit and push the verified Run 2 report-generator/handoff checkpoint, send Email 2 once with the verified PDF, confirm the send, and record completion. Do not rerun Run 2 or resend Email 1.
 2. Visual Pass 2 and counted Runs 3–4: improve chamber wayfinding, module selection, placement, structure-specific function evidence, drought/recovery cues, and accessibility validation; correct only Run 3 failures before Run 4.
 3. Visual Pass 3 and counted Run 5: polish dialogs, Overview, hints, grade breakdown, pause, results, practice, delivery status, and cohesion; verify the protected Preview and real synthetic backend path without promoting Production.
 4. Complete the final swarm audit, final handoff/commit/push, and Email 6.

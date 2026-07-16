@@ -24,17 +24,17 @@ PANEL = colors.HexColor("#0E3028")
 CAPTIONS = {
     "01-identify-blank.png": (
         "1. Blank identification form",
-        "The attempt begins with only first name, last initial, and class period. The baseline "
-        "already keeps identity off the public gameplay HUD.",
+        "The attempt begins with only first name, last initial, and class period. Gameplay and "
+        "Results screens keep identity off the public HUD.",
     ),
     "02-controls-practice-complete.png": (
         "2. Selected controls and completed tutorial practice",
-        "Touch Only was selected. The untimed practice required movement, look, Interact, Place, "
-        "and Recenter before the mission button enabled.",
+        "The selected control profile completed untimed practice for movement, look, Interact, "
+        "Place, and Recenter before the mission button enabled.",
     ),
     "03-mission-opening.png": (
         "3. Mission opening and first wall objective",
-        "The 15-minute active timer begins only after practice. The baseline objective identifies "
+        "The 15-minute active timer begins only after practice. The opening objective identifies "
         "the wall task and the green supply depot.",
     ),
     "04-boundary-and-cytoplasm.png": (
@@ -44,8 +44,8 @@ CAPTIONS = {
     ),
     "05-nucleus-and-ribosomes.png": (
         "5. Nucleus and ribosomes",
-        "Both approved Unit 1 structures are installed and inspected. The screenshot also exposes "
-        "the baseline scene crowding that Visual Pass 2 will address.",
+        "Both approved Unit 1 structures are installed and inspected. Their scene scale and "
+        "silhouette remain visible for the next visual review.",
     ),
     "06-mitochondria-and-chloroplasts.png": (
         "6. Mitochondria and chloroplasts",
@@ -64,7 +64,7 @@ CAPTIONS = {
     ),
     "08-hydrated-overview.png": (
         "8. Hydrated vacuole, firm plant, and 100% turgor",
-        "Overview records the hydrated baseline: a full central vacuole, high turgor pressure, and "
+        "Overview records the hydrated state: a full central vacuole, high turgor pressure, and "
         "a firm plant indicator.",
     ),
     "09-drought-wilt-overview.png": (
@@ -79,9 +79,43 @@ CAPTIONS = {
     ),
     "11-results-delivered.png": (
         "11. Results at 100% with delivery status",
-        "The complete rubric totals 100%. This local baseline used an intercepted synthetic "
-        "accepted receipt; no external student record was created.",
+        "The complete rubric totals 100%. The visible delivery state records the accepted "
+        "submission outcome for this synthetic test run.",
     ),
+}
+
+PHASE_LABELS = {
+    "baseline": "BASELINE EVIDENCE",
+    "visual-pass-1": "VISUAL PASS 1 EVIDENCE",
+    "visual-pass-2": "VISUAL PASS 2 EVIDENCE",
+    "visual-pass-3": "VISUAL PASS 3 EVIDENCE",
+}
+
+CHECKPOINT_HIGHLIGHTS = {
+    "baseline": [
+        "The original application completed the entire mission through visible controls.",
+        "The evidence established the iPad-first starting point for three bounded visual passes.",
+        "Function credit required nearby Inspect + Interact rather than placement alone.",
+        "Scene wayfinding and structure-specific feedback remained for later visual passes.",
+    ],
+    "visual-pass-1": [
+        "The identification and control tutorial fit the 1024 x 680 target viewport.",
+        "Critical touch controls meet the 56px minimum without joystick or HUD overlap.",
+        "HUD, hotbar, and action lanes present one obvious next action at a time.",
+        "Nearby Inspect + Interact guidance now states how function evidence is earned.",
+    ],
+    "visual-pass-2": [
+        "Chamber wayfinding and active supply guidance are clearer during construction.",
+        "Selection, placement, correction, and structure-function feedback are easier to read.",
+        "Drought, wilt, and recovery use color-independent visual and text cues.",
+        "The mission remains bounded to the approved eight Unit 1 structures.",
+    ],
+    "visual-pass-3": [
+        "Dialogs, Overview, hints, grade breakdown, and Results share a coherent layout.",
+        "Practice and delivery status remain clear without exposing student identity.",
+        "The final Preview flow preserves the same visible-control mission evidence.",
+        "Production remains unpromoted pending the physical school-iPad gates.",
+    ],
 }
 
 
@@ -162,20 +196,35 @@ def draw_cover(
     next_focus: str,
 ) -> None:
     width, height = letter
-    page_frame(pdf, 1, f"Counted Run {manifest['countedRun']}")
+    run_number = manifest["countedRun"]
+    visual_pass = manifest.get("visualPass", "baseline")
+    phase_label = PHASE_LABELS.get(visual_pass, visual_pass.replace("-", " ").upper())
+    submission_mode = manifest.get("submissionMode", "synthetic")
+    if submission_mode == "intercepted-synthetic":
+        submission_summary = "Local intercepted synthetic accepted receipt"
+        submission_note = (
+            "The local submission was intercepted and answered with a synthetic accepted "
+            "receipt, so no external student record was created."
+        )
+    else:
+        submission_summary = "Protected Preview synthetic accepted receipt"
+        submission_note = (
+            "The protected Preview used the real synthetic backend path and returned an "
+            "accepted receipt marked as test data."
+        )
+    page_frame(pdf, 1, f"Counted Run {run_number}")
     pdf.setFillColor(LIME)
     pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(42, height - 86, "BASELINE EVIDENCE")
+    pdf.drawString(42, height - 86, phase_label)
     pdf.setFillColor(INK)
     pdf.setFont("Helvetica-Bold", 30)
-    pdf.drawString(42, height - 128, "Run 1 completed at 100%")
+    pdf.drawString(42, height - 128, f"Run {run_number} completed at 100%")
     pdf.setFillColor(MUTED)
     y = draw_wrapped(
         pdf,
-        "A fresh iPad-WebKit browser context completed identification, the actual control "
+        f"A fresh {manifest['engine']} context completed identification, the actual control "
         "tutorial, all eight approved structures, drought, recovery, and Results through visible "
-        "controls. The local submission was intercepted and answered with a synthetic accepted "
-        "receipt, so no external student record was created.",
+        f"controls. {submission_note}",
         42,
         height - 166,
         width - 84,
@@ -187,12 +236,12 @@ def draw_cover(
     pdf.roundRect(42, y - 154, width - 84, 154, 12, fill=1, stroke=0)
     pdf.setFillColor(INK)
     rows = [
-        ("Profile", f"{manifest['engine']} · {manifest['viewport']['width']}×{manifest['viewport']['height']} · Touch Only"),
-        ("App baseline", manifest["appBaseSha"][:12]),
+        ("Profile", f"{manifest['engine']} · {manifest['viewport']['width']}×{manifest['viewport']['height']} · {manifest['controls'].replace('-', ' ').title()}"),
+        ("App checkpoint", manifest["appBaseSha"][:12]),
         ("Evidence commit", evidence_sha[:12]),
         ("Errors", f"{len(manifest['pageErrors'])} page · {len(manifest['consoleErrors'])} console"),
         ("Panels", "11 numbered panels · 12 verified PNG files"),
-        ("Submission", "Local intercepted synthetic accepted receipt"),
+        ("Submission", submission_summary),
     ]
     row_y = y - 25
     for key, value in rows:
@@ -206,17 +255,12 @@ def draw_cover(
     y -= 184
     pdf.setFillColor(INK)
     pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(42, y, "Baseline findings carried into Visual Pass 1")
+    pdf.drawString(42, y, "Verified progress in this checkpoint")
     pdf.setFillColor(MUTED)
-    findings = [
-        "The control tutorial is taller than one iPad viewport and needs clearer continuation.",
-        "The objective must say nearby Inspect + Interact, not imply Overview awards function credit.",
-        "HUD hierarchy, hotbar selection, and smaller critical targets need iPad-first refinement.",
-        "Scene wayfinding and structure-specific feedback are reserved for Visual Pass 2.",
-    ]
+    findings = CHECKPOINT_HIGHLIGHTS.get(visual_pass, [])
     y -= 23
     for finding in findings:
-        y = draw_wrapped(pdf, f"• {finding}", 52, y, width - 104, size=10.5, leading=14)
+        y = draw_wrapped(pdf, f"- {finding}", 52, y, width - 104, size=10.5, leading=14)
         y -= 5
     y -= 8
     pdf.setFillColor(LIME)
@@ -270,6 +314,8 @@ def main() -> None:
     run_dir = args.run_dir.resolve()
     output = args.output.resolve()
     manifest = verified_manifest(run_dir)
+    if manifest.get("evidenceSha") != args.evidence_sha:
+        raise ValueError("Evidence SHA does not match the redacted run manifest.")
     output.parent.mkdir(parents=True, exist_ok=True)
 
     pdf = canvas.Canvas(str(output), pagesize=letter, pageCompression=1)
