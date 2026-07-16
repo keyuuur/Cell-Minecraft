@@ -19,12 +19,12 @@ Before the physical test, run the `@live` Playwright gate against the exact Verc
 
 ## Backend gate — synthetic data only
 
-- [ ] Create a dedicated teacher-owned results spreadsheet.
-- [ ] Deploy `apps-script/Code.gs` by following `apps-script/README.md`.
-- [ ] Configure the Vercel environment values without committing them.
-- [ ] Submit one `isTest=true` attempt through the Vercel preview and receive an accepted receipt.
-- [ ] Retry the same `attemptId` and receive the original duplicate receipt with one raw row.
-- [ ] Confirm test rows never enter `BestResults`.
+- [x] Create a dedicated teacher-owned results spreadsheet.
+- [x] Deploy `apps-script/Code.gs` by following `apps-script/README.md`.
+- [x] Configure the Vercel Preview environment values without committing them; Production remains unconfigured.
+- [x] Submit one production-shaped synthetic attempt through the Vercel Preview, confirm the Preview proxy forces `isTest=true`, and receive an accepted receipt.
+- [x] Retry the same transient `attemptId`, receive the original accepted receipt, and confirm no second raw row is created.
+- [x] Confirm test rows never enter `BestResults`.
 - [ ] Verify malformed, oversized, formula-like, unknown-assignment, incompatible-version, and contradictory-outcome payloads are rejected or sanitized.
 - [ ] Simulate an interrupted connection, reload, and confirm the queued result submits once.
 - [ ] Confirm delivery failure never erases the completed result or diagnostic export.
