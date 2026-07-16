@@ -58,7 +58,7 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Visual Pass 2 accessibility-correction commit: `01dd4463af0d1835d3301cb29f1a472a398cb8c7` (`fix: validate accessible touch HUD`). Counted Run 4 used this exact committed app/evidence SHA. Reporting checkpoint `9a25e58` (`docs: verify counted Run 4 report`) is pushed, and Email 4 was sent once to the authenticated school-domain self-address with the verified PDF attached.
 - Run 4 delivery checkpoint: `1adb34a79f55665e74d8902f6904492adec85412` (`docs: record Run 4 report delivery`) is pushed and is the verified upstream base for Visual Pass 3.
 - Visual Pass 3 UI candidate commit: `7257ad13abe194fcf2a875fbb9b2bd5fbbbf7bee` (`feat: complete visual pass 3 candidate`). Final protected-Preview evidence-harness commit: `1e0b68b4b93eb557588b1184b122f8800c82653e` (`test: preserve raw preview test flag`), which contains the unchanged verified UI candidate plus the complete privacy, freshness, idempotency, Preview-only safety, accurate target-labeling, bounded visible-control navigation, exact raw-boolean capture, and server-forced Preview test-classification sequence. Use `1e0b68b4b93eb557588b1184b122f8800c82653e` as the evidence SHA for counted Run 5. A later handoff-only checkpoint may be the Preview's tested app SHA without changing this evidence SHA.
-- Counted Run 5 used exact protected-Preview application SHA `f64fb5301d16f2275d4fc35297d1e4ed2ed3d9f5` and evidence SHA `1e0b68b4b93eb557588b1184b122f8800c82653e`. The run, live synthetic receipt, duplicate idempotency probe, private-Sheet verification, original-resolution image review, independent swarm gate, and 19-page report inspection passed. This completes counted runs 5 of 5 and visual passes 3 of 3; rollout emails remain 4 of 6 until Email 5 is sent.
+- Counted Run 5 used exact protected-Preview application SHA `f64fb5301d16f2275d4fc35297d1e4ed2ed3d9f5` and evidence SHA `1e0b68b4b93eb557588b1184b122f8800c82653e`. The run, live synthetic receipt, duplicate idempotency probe, private-Sheet verification, original-resolution image review, independent swarm gate, and 19-page report inspection passed. Reporting checkpoint `762a621` was pushed, and Email 5 was sent once to the authenticated school-domain self-address with the verified PDF attached. This completes counted runs 5 of 5, visual passes 3 of 3, and rollout emails 5 of 6.
 - Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration. The Production deployment was created from the guidance-only `main` branch and is not an accepted game deployment. A protected `codex/build-a-living-cell` Preview from `a1f01d8` was previously verified Ready. Its exact private URL, Apps Script URL, and proxy key are intentionally omitted; the backend values are Sensitive and Preview-only. Production was not configured or promoted.
 - Google backend: the school-owned Sheet `Build a Living Cell - Results` is private to the owner and contains only `RawSubmissions` and `BestResults`. The matching Apps Script backend is deployed as a web app that executes as the owner and accepts anonymous requests while enforcing the proxy key and payload validation. No Google Sheet ID, Apps Script deployment URL, proxy key, account credentials, or other backend secret is stored in this handoff.
 
@@ -198,7 +198,7 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ### Visual Pass 3 validation and counted UI rollout Run 5 - verified 2026-07-16
 
-- Status: **passed Visual Pass 3 as 3 of 3 and counted Run 5 as 5 of 5**. Email 5 has not yet been sent at this checkpoint, so rollout emails remain 4 of 6.
+- Status: **passed Visual Pass 3 as 3 of 3 and counted Run 5 as 5 of 5**. Email 5 was sent successfully with the verified PDF; rollout emails are 5 of 6.
 - Application commit: `f64fb5301d16f2275d4fc35297d1e4ed2ed3d9f5`. Evidence harness commit: `1e0b68b4b93eb557588b1184b122f8800c82653e`.
 - Profile: exact Ready protected Vercel Preview, iPad-landscape WebKit browser emulation, 1024 x 768, Touch Only, standard settings. This is not physical-iPad evidence.
 - Evidence: `output/playwright/ui-rollout-2026-07-16/03-visual-pass-3/run-05-counted-verified/` contains 12 core PNGs for the required 11 report panels, six diagnostic appendices, and a redacted `run.json`. All 18 SHA-256 hashes match; the evidence contains no identity, attempt/session ID, recipient, private URL, token, credential, or student data.
@@ -211,14 +211,13 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ## 7. Current active phase and exact remaining work
 
-Active phase: **Five-Run, Three-Pass Swarm UI Rollout - Run 5 reporting and final audit**.
+Active phase: **Five-Run, Three-Pass Swarm UI Rollout - final audit**.
 
 Remaining rollout work, in order:
 
-1. Run the applicable reporting checks, commit and push this handoff checkpoint using only the explicit intended file, and send Email 5 exactly once with the verified 19-page PDF; keep `AGENTS.md` and `KEYUR_WORKFLOW.md` unstaged.
-2. Complete the final automated, deployment, evidence-integrity, baseline-versus-final, Biology, classroom, UX, visual, skeptical, QA, and Ops swarm audit.
-3. Update this handoff with final verified posture, commit/push the final checkpoint, and send Email 6 exactly once.
-4. After the rollout, retain the pre-release external gates: live negative/retry/concurrency backend cases, shared-iPad pending-identity privacy, supervised physical-iPad access, physical device/network/student evidence, and post-device-gate asset/audio work.
+1. Complete the final automated, deployment, evidence-integrity, baseline-versus-final, Biology, classroom, UX, visual, skeptical, QA, and Ops swarm audit.
+2. Update this handoff with final verified posture, commit/push the final checkpoint, and send Email 6 exactly once.
+3. After the rollout, retain the pre-release external gates: live negative/retry/concurrency backend cases, shared-iPad pending-identity privacy, supervised physical-iPad access, physical device/network/student evidence, and post-device-gate asset/audio work.
 
 ## 8. Known risks, failures, and blockers
 
@@ -297,7 +296,7 @@ Failed gates trigger correction and retest. No user approval is needed between t
 1. Read current user instructions, the nearest `AGENTS.md`, `KEYUR_WORKFLOW.md`, and this file completely.
 2. Verify `git status`, current branch, HEAD/upstream, package lock, tests, GitHub Actions, deployment URLs, and backend state. Never trust stale prose over live evidence.
 3. Read the archived planning handoff only when a historical decision is missing here.
-4. Resume at the first unchecked item in section 7. Current counters are 5/5 counted runs, 3/3 completed visual passes, and 4/6 rollout emails until Email 5 is sent. Do not rerun or recount Runs 1-5, do not accept calibrations or superseded Preview attempts as counted evidence, and do not resend Emails 1-4. Counted Run 5 passed at app SHA `f64fb5301d16f2275d4fc35297d1e4ed2ed3d9f5` with evidence SHA `1e0b68b4b93eb557588b1184b122f8800c82653e`; the private Sheet has three raw test rows, no duplicate fourth row, and zero best rows; and the verified 19-page PDF is ready for Email 5. Use read → plan → implement → test.
+4. Resume at the first unchecked item in section 7. Current counters are 5/5 counted runs, 3/3 completed visual passes, and 5/6 rollout emails. Do not rerun or recount Runs 1-5, do not accept calibrations or superseded Preview attempts as counted evidence, and do not resend Emails 1-5. Counted Run 5 passed at app SHA `f64fb5301d16f2275d4fc35297d1e4ed2ed3d9f5` with evidence SHA `1e0b68b4b93eb557588b1184b122f8800c82653e`; the private Sheet has three raw test rows, no duplicate fourth row, and zero best rows; and Email 5 was sent with the verified 19-page PDF. Use read → plan → implement → test.
 5. In swarm mode, keep one implementation owner and independent read-only reviewers; route disagreement through the coordinator.
 6. After a passed gate, update sections 5–11 before commit/push. Rewrite current state and retain replaced decisions only in the short dated log.
 7. Never record credentials, OAuth details, student submissions, private names, or machine-local configuration.
