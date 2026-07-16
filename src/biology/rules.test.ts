@@ -99,4 +99,20 @@ describe('Unit 1 mission rules', () => {
     mission.droughtStarted = true;
     expect(statusValues(mission).turgor).toBe(25);
   });
+
+  it('directs incomplete function evidence to nearby Inspect and Interact, not Overview', () => {
+    const mission = completeMission();
+    mission.completed = false;
+    mission.droughtStarted = false;
+    mission.droughtDiagnosed = false;
+    mission.droughtObserved = false;
+    mission.recoveryRestored = false;
+    mission.vacuoleHydratedObserved = false;
+    delete mission.functionEvidence.centralVacuole;
+    const objective = objectiveFor(mission);
+    expect(objective).toContain('Inspect');
+    expect(objective).toContain('Interact');
+    expect(objective).toContain('7/8');
+    expect(objective).not.toContain('Overview');
+  });
 });

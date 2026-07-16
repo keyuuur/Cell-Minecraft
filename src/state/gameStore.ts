@@ -340,7 +340,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ...state.mission.placements,
         [selected]: { id: selected, position, placedAt: Date.now() },
       },
-      lastFeedback: `${stationLabel(selected)} installed. Its effect is now visible in the cell.`,
+      lastFeedback: `${stationLabel(selected)} installed. Move near it until Inspect appears, then tap Interact.`,
     };
     if (selected === 'centralVacuole') {
       mission = {
@@ -348,7 +348,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         waterAvailable: true,
         droughtStarted: false,
         lastFeedback:
-          'Water storage is established. Open Overview to observe the full vacuole and turgor.',
+          'Water storage is established. Move near the vacuole until Inspect appears, then tap Interact.',
         stageTimestamps: { ...mission.stageTimestamps, 'water-storage': Date.now() },
       };
     } else {

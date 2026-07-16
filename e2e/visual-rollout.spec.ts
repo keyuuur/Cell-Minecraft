@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 type ControlProfile = 'touch-only' | 'keyboard-touch';
 
@@ -165,9 +165,6 @@ async function holdMovement(
       });
       await page.waitForTimeout(120);
       await page.waitForTimeout(segment);
-      // WebKit can drop pointer capture at the joystick edge. Returning to the visible
-      // control before release mirrors a student's thumb release and keeps the stuck-input
-      // assertion meaningful.
       await page.mouse.move(centerX, centerY, { steps: 3 });
     } finally {
       await page.mouse.up();
@@ -268,7 +265,6 @@ async function moveUntilSemanticLabel(
     } catch {
       // The stopped late-frame check below covers the 180 ms semantic throttle.
     }
-    await page.mouse.move(centerX, centerY, { steps: 3 });
   } finally {
     await page.mouse.up();
   }
@@ -283,13 +279,13 @@ async function moveUntilSemanticLabel(
 
 async function navigateFromRecenter(page: Page, target: Point2, expected: RegExp): Promise<void> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    await page.getByRole('button', { name: 'Recenter' }).click();
+    await clickRecenter(page);
     await page.waitForTimeout(120);
     await rotateFromRecenter(page, target);
     const semanticLabel = page.locator('.nearby-label').filter({ hasText: expected });
     // Bounded joystick holds are independent of render FPS and continuously poll the same
     // visible HUD signal a student uses. One full recenter retry is allowed.
-    for (let segment = 0; segment < 4; segment += 1) {
+    for (let segment = 0; segment < 8; segment += 1) {
       if (await moveUntilSemanticLabel(page, 0, 1, semanticLabel)) return;
     }
   }
@@ -323,11 +319,19 @@ async function nudgeForwardUntil(page: Page, expected: RegExp, attempts = 8): Pr
 async function completeControlPractice(page: Page): Promise<void> {
   const arena = page.getByLabel('Untimed control practice arena');
   if (controlProfile === 'touch-only') {
-    await page.getByRole('radio', { name: /Touch Only/ }).click();
+    await activateVisibleControl(
+      page,
+      page.getByRole('radio', { name: /Touch Only/ }),
+      'Touch Only profile',
+    );
     const joystick = page.getByLabel('Practice movement joystick');
     await dragPracticeJoystick(joystick, 50, -16);
   } else {
-    await page.getByRole('radio', { name: /Keyboard \+ Touch/ }).click();
+    await activateVisibleControl(
+      page,
+      page.getByRole('radio', { name: /Keyboard \+ Touch/ }),
+      'Keyboard + Touch profile',
+    );
     await arena.focus();
     await page.keyboard.press('d');
     await page.keyboard.press('d');
@@ -336,7 +340,7 @@ async function completeControlPractice(page: Page): Promise<void> {
   }
 
   await page.waitForTimeout(300);
-  await page.getByRole('button', { name: 'Interact' }).click();
+  await tapVisibleButton(page, 'Interact');
   await expect(
     page.getByText('Cube collected. Move into the Target zone and place it.'),
   ).toBeVisible();
@@ -351,7 +355,7 @@ async function completeControlPractice(page: Page): Promise<void> {
     }
   }
   await page.waitForTimeout(300);
-  await page.getByRole('button', { name: 'Place' }).click();
+  await tapVisibleButton(page, 'Place');
   await expect(
     page.getByText('Placement worked. Practice looking, then recenter the view.'),
   ).toBeVisible();
@@ -362,7 +366,7 @@ async function completeControlPractice(page: Page): Promise<void> {
   await page.mouse.down();
   await page.mouse.move(box.x + 44, box.y + box.height / 2);
   await page.mouse.up();
-  await page.getByRole('button', { name: 'Recenter' }).click();
+  await tapVisibleButton(page, 'Recenter');
   await expect(page.getByRole('button', { name: 'Start mission and timer' })).toBeEnabled();
 }
 
@@ -401,13 +405,48 @@ async function readVisibleGrade(page: Page): Promise<number> {
   return Number(match[1]);
 }
 
+async function activateVisibleControl(
+  page: Page,
+  control: Locator,
+  label: string,
+  forceMouse = false,
+): Promise<void> {
+  await expect(control).toBeVisible();
+  await expect(control).toBeEnabled();
+  await control.scrollIntoViewIfNeeded();
+  const bounds = await control.boundingBox();
+  if (!bounds) throw new Error(`${label} control has no visible bounds.`);
+  const centerIsControl = await control.evaluate(
+    (element, { x, y }) => element.contains(document.elementFromPoint(x, y)),
+    { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 },
+  );
+  expect(centerIsControl, `${label} center is the visible hit target`).toBe(true);
+  if (controlProfile === 'touch-only' && !forceMouse) {
+    await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  } else if (forceMouse) {
+    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  } else {
+    await control.click();
+  }
+}
+
 async function clickVisibleButton(page: Page, name: string): Promise<void> {
   const button = page.getByRole('button', { name, exact: true });
-  await expect(button).toBeVisible();
-  await expect(button).toBeEnabled();
-  const bounds = await button.boundingBox();
-  if (!bounds) throw new Error(`${name} button has no visible bounds.`);
-  await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await activateVisibleControl(page, button, name, true);
+}
+
+async function tapVisibleButton(page: Page, name: string): Promise<void> {
+  const button = page.getByRole('button', { name, exact: true });
+  await activateVisibleControl(page, button, name);
+}
+
+async function clickRecenter(page: Page): Promise<void> {
+  await activateVisibleControl(
+    page,
+    page.getByRole('button', { name: 'Recenter', exact: true }),
+    'Recenter',
+    true,
+  );
 }
 
 async function collectFromDepot(page: Page, id: keyof typeof structureLabels): Promise<void> {
@@ -417,10 +456,21 @@ async function collectFromDepot(page: Page, id: keyof typeof structureLabels): P
   } else {
     await navigateFromRecenter(page, stations[id], new RegExp(`Nearby:\\s*${label}`, 'i'));
   }
-  await page.getByRole('button', { name: 'Interact' }).click();
+  await clickVisibleButton(page, 'Interact');
   await expect(page.locator('.feedback-toast')).toContainText(
     id === 'cytoplasm' ? 'Cytoplasm now fills' : 'Collected',
   );
+  if (id === 'cytoplasm') {
+    await expect(page.getByText('Established: Cytoplasm')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Place' })).not.toHaveClass(/action-primary/);
+    await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
+    await expect(page.locator('.action-cluster .action-primary')).toHaveCount(0);
+  } else {
+    await expect(page.getByText(`Selected: ${label}`)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Place' })).toHaveClass(/action-primary/);
+    await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
+    await expect(page.locator('.action-cluster .action-primary')).toHaveCount(1);
+  }
 }
 
 async function inspectStructure(
@@ -430,24 +480,25 @@ async function inspectStructure(
 ): Promise<void> {
   const label = structureLabels[id];
   await expect(page.getByText(`Inspect: ${label}`)).toBeVisible();
-  await page.getByRole('button', { name: 'Interact' }).click();
+  await clickVisibleButton(page, 'Interact');
   await expect(page.locator('.feedback-toast')).toContainText('function observed');
   await expect(page.getByLabel('Cell status')).toContainText(expectedFunctionPercent);
+  await expect(page.getByText(`Observed: ${label}`)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
+  await expect(page.locator('.action-cluster .action-primary')).toHaveCount(0);
 }
 
 async function selectVisibleHotbarItem(page: Page, label: string): Promise<void> {
   const button = page.getByRole('button', { name: label, exact: true });
-  const bounds = await button.boundingBox();
-  if (!bounds) throw new Error(`${label} hotbar control is not visible.`);
-  // The baseline HUD can overlap the right side of later hotbar items. Use the still-visible
-  // left portion without force-clicking through the action overlay.
-  await button.click({ position: { x: 18, y: bounds.height / 2 } });
+  await button.scrollIntoViewIfNeeded();
+  await expect(button).toBeVisible();
+  await activateVisibleControl(page, button, label, true);
   await expect(button).toHaveClass(/is-selected/);
 }
 
 async function placeCentralVacuole(page: Page): Promise<void> {
   const feedback = page.locator('.feedback-toast');
-  await page.getByRole('button', { name: 'Recenter' }).click();
+  await clickRecenter(page);
   await page.waitForTimeout(120);
   // Recenter's locked heading already crosses the broad central zone. Keeping that heading avoids
   // small drag-look variance while the visible Place feedback determines when to stop.
@@ -472,7 +523,7 @@ async function placeBoundaryPanels(page: Page, id: 'cellWall' | 'cellMembrane'):
   const successPattern = id === 'cellWall' ? /Wall panel snapped/i : /Membrane panel snapped/i;
   const correctionPattern =
     id === 'cellWall' ? /Move to the chamber boundary/i : /Move to the inside boundary/i;
-  await page.getByRole('button', { name: 'Recenter' }).click();
+  await clickRecenter(page);
   await page.waitForTimeout(120);
   await rotateFromRecenter(page, placements[id]);
 
@@ -488,7 +539,9 @@ async function placeBoundaryPanels(page: Page, id: 'cellWall' | 'cellMembrane'):
     if (!correctionPattern.test(message)) {
       throw new Error(`Unexpected boundary placement feedback: ${message}`);
     }
-    await holdForward(page, 120);
+    // A long visible joystick hold remains reliable when software WebKit renders slowly;
+    // at normal frame rates it moves from recenter directly into the broad boundary band.
+    await holdForward(page, 1_500);
   }
   if (placed === 0) throw new Error(`Visible placement retries did not reach the ${id} zone.`);
 
@@ -571,12 +624,12 @@ test.describe('real-control visual rollout evidence', () => {
     await page.getByLabel('First name').fill('Test');
     await page.getByLabel('Last initial').fill('S');
     await page.getByLabel('Class period').selectOption('1');
-    await page.getByRole('button', { name: 'Continue to controls' }).click();
+    await tapVisibleButton(page, 'Continue to controls');
     await completeControlPractice(page);
     await page.getByRole('button', { name: 'Start mission and timer' }).scrollIntoViewIfNeeded();
     await capture(page, screenshots, 2, 'controls-practice-complete', true);
     const missionStartClickedAt = Date.now();
-    await page.getByRole('button', { name: 'Start mission and timer' }).click();
+    await clickVisibleButton(page, 'Start mission and timer');
     await expect(page.getByLabel('Mission controls')).toBeVisible();
     await expect(page.getByLabel('Three-dimensional plant cell construction chamber')).toBeVisible({
       timeout: 10_000,
@@ -591,12 +644,12 @@ test.describe('real-control visual rollout evidence', () => {
     );
     await assertGraphicsHealthy(page);
     graphicsContextChecks += 1;
-    await page.getByRole('button', { name: 'Pause' }).click();
+    await clickVisibleButton(page, 'Pause');
     await expect(page.getByRole('dialog', { name: 'Mission paused' })).toBeVisible();
     const timerWhilePaused = await page.locator('.timer-card strong').textContent();
     await page.waitForTimeout(1_200);
     await expect(page.locator('.timer-card strong')).toHaveText(timerWhilePaused ?? '15:00');
-    await page.getByRole('button', { name: 'Resume mission' }).click();
+    await clickVisibleButton(page, 'Resume mission');
     await expect(page.getByRole('dialog', { name: 'Mission paused' })).toHaveCount(0);
     semanticAssertions.push('visible Pause and Resume held the active timer');
 
@@ -627,7 +680,7 @@ test.describe('real-control visual rollout evidence', () => {
       ['ribosomes', /63%/],
     ] as const) {
       await collectFromDepot(page, id);
-      await navigateFromRecenter(page, placements[id], /Inspect:\s*Cytoplasm/i);
+      await navigateFromRecenter(page, placements[id], /Observed:\s*Cytoplasm/i);
       await clickVisibleButton(page, 'Place');
       await expect(page.locator('.feedback-toast')).toContainText('installed');
       await page.waitForTimeout(360);
@@ -635,7 +688,7 @@ test.describe('real-control visual rollout evidence', () => {
       if (id === 'nucleus') {
         const gradeBeforeRemoval = await readVisibleGrade(page);
         await selectVisibleHotbarItem(page, 'Nucleus');
-        await page.getByRole('button', { name: 'Remove selected' }).click();
+        await clickVisibleButton(page, 'Remove selected');
         await expect(page.locator('.feedback-toast')).toContainText(
           'Replace it to restore full credit',
         );
@@ -663,7 +716,7 @@ test.describe('real-control visual rollout evidence', () => {
       ['chloroplasts', /88%/],
     ] as const) {
       await collectFromDepot(page, id);
-      await navigateFromRecenter(page, placements[id], /Inspect:\s*Cytoplasm/i);
+      await navigateFromRecenter(page, placements[id], /Observed:\s*Cytoplasm/i);
       await clickVisibleButton(page, 'Place');
       await expect(page.locator('.feedback-toast')).toContainText('installed');
       await page.waitForTimeout(360);
@@ -682,28 +735,28 @@ test.describe('real-control visual rollout evidence', () => {
       'all eight function evidence events earned through Inspect and Interact',
     );
 
-    await page.getByRole('button', { name: 'Overview' }).click();
+    await clickVisibleButton(page, 'Overview');
     await expect(page.getByRole('dialog', { name: 'Cell overview' })).toBeVisible();
     await expect(page.getByText('100% recorded')).toBeVisible();
     await expect(page.getByText('100% pressure')).toBeVisible();
     await expect(page.getByText(/Baseline: the vacuole is full/)).toBeVisible();
     await capture(page, screenshots, 8, 'hydrated-overview', true);
-    await page.getByRole('button', { name: 'Begin water-availability challenge' }).click();
+    await clickVisibleButton(page, 'Begin water-availability challenge');
 
-    await page.getByRole('button', { name: 'Overview' }).click();
+    await clickVisibleButton(page, 'Overview');
     await expect(page.getByText('25% pressure')).toBeVisible();
     await expect(page.getByText(/central vacuole is shrinking/)).toBeVisible();
     await capture(page, screenshots, 9, 'drought-wilt-overview', true);
-    await page.getByRole('button', { name: 'Close overview' }).click();
+    await clickVisibleButton(page, 'Close overview');
 
     await navigateFromRecenter(page, stations.waterStation, /Nearby:\s*Water station/i);
-    await page.getByRole('button', { name: 'Interact' }).click();
+    await clickVisibleButton(page, 'Interact');
     await expect(page.locator('.feedback-toast')).toContainText('Water availability is restored');
-    await page.getByRole('button', { name: 'Overview' }).click();
+    await clickVisibleButton(page, 'Overview');
     await expect(page.getByText('100% pressure')).toBeVisible();
     await expect(page.locator('.system-success')).toContainText('plant is firm again');
     await capture(page, screenshots, 10, 'recovered-overview', true);
-    await page.getByRole('button', { name: 'Close overview' }).click();
+    await clickVisibleButton(page, 'Close overview');
 
     await expect(page.getByText(/Cell stable/)).toBeVisible();
     await assertGraphicsHealthy(page);
@@ -712,7 +765,7 @@ test.describe('real-control visual rollout evidence', () => {
       const url = new URL(response.url());
       return response.request().method() === 'POST' && url.pathname === '/api/submit';
     });
-    await page.getByRole('button', { name: 'Submit final result' }).click();
+    await clickVisibleButton(page, 'Submit final result');
     const receiptResponse = await receiptResponsePromise;
     expect(receiptResponse.ok(), 'successful submission response').toBe(true);
     const receiptBody = (await receiptResponse.json()) as {

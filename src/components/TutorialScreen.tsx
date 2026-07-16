@@ -56,6 +56,14 @@ export function TutorialScreen() {
     setPracticed((value) => ({ ...value, move: true }));
   };
 
+  const stopJoystick = () => {
+    joystickOrigin.current = null;
+  };
+
+  const stopLooking = () => {
+    lookOrigin.current = null;
+  };
+
   return (
     <main className="screen tutorial-screen">
       <section className="tutorial-card">
@@ -71,7 +79,12 @@ export function TutorialScreen() {
               aria-checked={controls === option.id}
               onClick={() => setControls(option.id)}
             >
-              <strong>{option.title}</strong>
+              <span className="choice-heading">
+                <strong>{option.title}</strong>
+                <small className="choice-state" aria-hidden="true">
+                  {controls === option.id ? '✓ Selected' : 'Select'}
+                </small>
+              </span>
               <span>{option.description}</span>
             </button>
           ))}
@@ -164,9 +177,9 @@ export function TutorialScreen() {
                 });
                 setPracticed((value) => ({ ...value, move: true }));
               }}
-              onPointerUp={() => {
-                joystickOrigin.current = null;
-              }}
+              onPointerUp={stopJoystick}
+              onPointerCancel={stopJoystick}
+              onLostPointerCapture={stopJoystick}
             >
               ●
             </div>
@@ -190,11 +203,11 @@ export function TutorialScreen() {
                   setPracticed((value) => ({ ...value, look: true }));
                 }
               }}
-              onPointerUp={() => {
-                lookOrigin.current = null;
-              }}
+              onPointerUp={stopLooking}
+              onPointerCancel={stopLooking}
+              onLostPointerCapture={stopLooking}
             >
-              Drag to look
+              LOOK — drag here
             </div>
             <div className="practice-actions">
               <button

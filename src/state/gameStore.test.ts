@@ -60,6 +60,15 @@ describe('active-time and mission state', () => {
     expect(useGameStore.getState().mission.functionEvidence.cellWall).toBeUndefined();
   });
 
+  it('does not award function evidence when Overview opens', () => {
+    useGameStore.setState((state) => ({
+      mission: { ...state.mission, wallPanels: 6 },
+    }));
+    const before = useGameStore.getState().mission.functionEvidence;
+    useGameStore.getState().openOverview();
+    expect(useGameStore.getState().mission.functionEvidence).toEqual(before);
+  });
+
   it('separates hydrated baseline, drought observation, repair diagnosis, and recovery verification', () => {
     for (let step = 0; step < 6; step += 1) useGameStore.getState().testAdvanceStage();
     expect(useGameStore.getState().mission.vacuoleHydratedObserved).toBe(true);

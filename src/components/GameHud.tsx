@@ -47,6 +47,22 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
   const collectedItems = Object.keys(mission.collected).filter(
     (id) => mission.collected[id as keyof typeof mission.collected],
   );
+  const nearbyFunctionObserved = nearbyStructure
+    ? Boolean(mission.functionEvidence[nearbyStructure])
+    : false;
+  const nearbyStationComplete = nearbyStation
+    ? nearbyStation === 'waterStation'
+      ? !mission.droughtStarted || mission.recoveryRestored
+      : nearbyStation === 'cytoplasm'
+        ? mission.cytoplasmEstablished
+        : Boolean(mission.collected[nearbyStation])
+    : false;
+  const placeIsPrimary = Boolean(selectedItem);
+  const interactIsPrimary =
+    !placeIsPrimary &&
+    Boolean(
+      (nearbyStation && !nearbyStationComplete) || (nearbyStructure && !nearbyFunctionObserved),
+    );
   const modalOpen = showOverview || showScore || showHints || paused;
 
   useEffect(() => {
@@ -118,12 +134,32 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
         </div>
         {nearbyStation && (
           <div className="nearby-label">
-            Nearby:{' '}
-            {nearbyStation === 'waterStation' ? 'Water station' : STRUCTURE_LABELS[nearbyStation]}
+            {selectedItem && nearbyStation !== 'waterStation' ? (
+              <>Selected: {STRUCTURE_LABELS[selectedItem]} — move to its zone and tap Place</>
+            ) : nearbyStationComplete ? (
+              <>
+                {nearbyStation === 'waterStation'
+                  ? 'Checked: Water station'
+                  : nearbyStation === 'cytoplasm'
+                    ? 'Established: Cytoplasm'
+                    : `Collected: ${STRUCTURE_LABELS[nearbyStation]}`}
+              </>
+            ) : (
+              <>
+                Nearby:{' '}
+                {nearbyStation === 'waterStation'
+                  ? 'Water station'
+                  : STRUCTURE_LABELS[nearbyStation]}
+                {' — tap Interact'}
+              </>
+            )}
           </div>
         )}
         {!nearbyStation && nearbyStructure && (
-          <div className="nearby-label">Inspect: {STRUCTURE_LABELS[nearbyStructure]}</div>
+          <div className="nearby-label">
+            {nearbyFunctionObserved ? 'Observed' : 'Inspect'}: {STRUCTURE_LABELS[nearbyStructure]}
+            {!nearbyFunctionObserved && ' — tap Interact'}
+          </div>
         )}
 
         <nav className="hotbar" aria-label="Collected cell modules">
@@ -135,6 +171,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
                 type="button"
                 key={id}
                 className={selectedItem === id ? 'is-selected' : ''}
+                aria-pressed={selectedItem === id}
                 onClick={() => selectItem(id as keyof typeof STRUCTURE_LABELS)}
               >
                 {STRUCTURE_LABELS[id as keyof typeof STRUCTURE_LABELS]}
@@ -144,11 +181,15 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
         </nav>
 
         <div className="action-cluster">
-          <button className="hud-button action-primary" type="button" onClick={interact}>
+          <button
+            className={`hud-button context-action ${interactIsPrimary ? 'action-primary' : ''}`}
+            type="button"
+            onClick={interact}
+          >
             Interact
           </button>
           <button
-            className="hud-button"
+            className={`hud-button ${placeIsPrimary ? 'action-primary' : ''}`}
             type="button"
             onClick={() =>
               placeSelected(

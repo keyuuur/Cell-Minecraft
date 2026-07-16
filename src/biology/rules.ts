@@ -60,7 +60,7 @@ export function objectiveFor(mission: MissionState): string {
       }
       if (REQUIRED_STRUCTURES.some((id) => !mission.functionEvidence[id])) {
         const observed = REQUIRED_STRUCTURES.filter((id) => mission.functionEvidence[id]).length;
-        return `Use Overview to observe each structure effect (${observed}/8).`;
+        return `Move until Inspect appears, then tap Interact (${observed}/8 functions).`;
       }
       return mission.vacuoleHydratedObserved
         ? 'Begin the water-availability challenge from Overview.'

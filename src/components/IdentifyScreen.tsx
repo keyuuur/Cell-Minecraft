@@ -19,12 +19,17 @@ export function IdentifyScreen({
   const [lastInitial, setLastInitial] = useState('');
   const [period, setPeriod] = useState('');
   const [error, setError] = useState('');
+  const cleanFirst = firstName.trim().replace(/\s+/g, ' ');
+  const cleanInitial = lastInitial.trim().slice(0, 1).toUpperCase();
+  const numericPeriod = Number(period);
+  const canContinue =
+    cleanFirst.length >= 1 &&
+    cleanFirst.length <= 40 &&
+    /^[A-Z]$/.test(cleanInitial) &&
+    ASSIGNMENT.periods.includes(numericPeriod);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const cleanFirst = firstName.trim().replace(/\s+/g, ' ');
-    const cleanInitial = lastInitial.trim().slice(0, 1).toUpperCase();
-    const numericPeriod = Number(period);
     if (cleanFirst.length < 1 || cleanFirst.length > 40) {
       setError('Enter your first name using 1–40 characters.');
       return;
@@ -74,6 +79,7 @@ export function IdentifyScreen({
             <input
               autoComplete="given-name"
               maxLength={40}
+              required
               value={firstName}
               onChange={(event) => setFirstName(event.target.value)}
             />
@@ -84,14 +90,22 @@ export function IdentifyScreen({
               autoComplete="family-name"
               inputMode="text"
               maxLength={1}
+              required
               value={lastInitial}
               onChange={(event) => setLastInitial(event.target.value.replace(/[^a-z]/gi, ''))}
             />
           </label>
           <label>
             Class period
-            <select value={period} onChange={(event) => setPeriod(event.target.value)}>
-              <option value="">Choose 1–7</option>
+            <select
+              className={period ? '' : 'is-placeholder'}
+              required
+              value={period}
+              onChange={(event) => setPeriod(event.target.value)}
+            >
+              <option value="" disabled>
+                Choose 1–7
+              </option>
               {ASSIGNMENT.periods.map((value) => (
                 <option key={value} value={value}>
                   Period {value}
@@ -104,7 +118,15 @@ export function IdentifyScreen({
               {error}
             </p>
           )}
-          <button className="primary-button" type="submit">
+          <p className="form-guidance" id="identify-guidance">
+            Complete all three fields to continue.
+          </p>
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={!canContinue}
+            aria-describedby="identify-guidance"
+          >
             Continue to controls
           </button>
         </form>

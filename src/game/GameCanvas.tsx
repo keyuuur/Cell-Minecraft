@@ -43,7 +43,10 @@ export function GameCanvas({
     sceneRef.current = controller;
     controller.syncMission(mission);
     const resize = () => controller.resize();
-    const clear = () => controller.clearInput();
+    const clear = () => {
+      controller.clearInput();
+      setJoystickActive(false);
+    };
     window.addEventListener('resize', resize);
     window.addEventListener('blur', clear);
     window.addEventListener('orientationchange', clear);
@@ -75,6 +78,11 @@ export function GameCanvas({
     sceneRef.current?.setJoystick((dx / length) * strength, (-dy / length) * strength);
   };
 
+  const stopJoystick = () => {
+    setJoystickActive(false);
+    sceneRef.current?.setJoystick(0, 0);
+  };
+
   return (
     <div
       className="game-canvas-wrap"
@@ -86,21 +94,20 @@ export function GameCanvas({
           className={`virtual-joystick ${joystickActive ? 'is-active' : ''}`}
           aria-label="Movement joystick"
           onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
+            try {
+              event.currentTarget.setPointerCapture(event.pointerId);
+            } catch {
+              // Synthetic browser checks have no active hardware pointer to capture.
+            }
             joystickOrigin.current = { x: event.clientX, y: event.clientY };
             setJoystickActive(true);
           }}
           onPointerMove={(event) => {
             if (joystickActive) moveJoystick(event.clientX, event.clientY);
           }}
-          onPointerUp={() => {
-            setJoystickActive(false);
-            sceneRef.current?.setJoystick(0, 0);
-          }}
-          onPointerCancel={() => {
-            setJoystickActive(false);
-            sceneRef.current?.setJoystick(0, 0);
-          }}
+          onPointerUp={stopJoystick}
+          onPointerCancel={stopJoystick}
+          onLostPointerCapture={stopJoystick}
         >
           <span aria-hidden="true">●</span>
         </div>

@@ -15,10 +15,13 @@ describe('student identification', () => {
         onClearData={vi.fn()}
       />,
     );
+    const continueButton = screen.getByRole('button', { name: 'Continue to controls' });
+    expect(continueButton).toBeDisabled();
     await user.type(screen.getByLabelText('First name'), 'Ari');
     await user.type(screen.getByLabelText('Last initial'), 'p');
     await user.selectOptions(screen.getByLabelText('Class period'), '3');
-    await user.click(screen.getByRole('button', { name: 'Continue to controls' }));
+    expect(continueButton).toBeEnabled();
+    await user.click(continueButton);
     expect(onIdentify).toHaveBeenCalledWith({ firstName: 'Ari', lastInitial: 'P', period: 3 });
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
   });

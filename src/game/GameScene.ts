@@ -322,6 +322,7 @@ export class GameScene {
     canvas.addEventListener('pointermove', this.handlePointerMove);
     canvas.addEventListener('pointerup', this.handlePointerRelease);
     canvas.addEventListener('pointercancel', this.handlePointerRelease);
+    canvas.addEventListener('lostpointercapture', this.handlePointerRelease);
   }
 
   private handleKeyDown = (event: KeyboardEvent): void => {
@@ -345,7 +346,11 @@ export class GameScene {
     event.preventDefault();
     this.pointerId = event.pointerId;
     this.pointerPoint = { x: event.clientX, y: event.clientY };
-    this.canvas.setPointerCapture(event.pointerId);
+    try {
+      this.canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic browser checks have no active hardware pointer to capture.
+    }
   };
 
   private handlePointerMove = (event: PointerEvent): void => {
@@ -779,6 +784,7 @@ export class GameScene {
     canvas.removeEventListener('pointermove', this.handlePointerMove);
     canvas.removeEventListener('pointerup', this.handlePointerRelease);
     canvas.removeEventListener('pointercancel', this.handlePointerRelease);
+    canvas.removeEventListener('lostpointercapture', this.handlePointerRelease);
     this.clearInput();
     this.scene.dispose();
     this.engine.dispose();

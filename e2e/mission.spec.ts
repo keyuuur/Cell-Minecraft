@@ -1,5 +1,10 @@
 import { expect, type Page, test } from '@playwright/test';
 
+type Box = { x: number; y: number; width: number; height: number };
+
+const overlaps = (a: Box, b: Box) =>
+  !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y);
+
 async function completeControlPractice(page: Page, touchOnly = false) {
   const arena = page.getByLabel('Untimed control practice arena');
   if (touchOnly) {
@@ -79,6 +84,60 @@ test('@smoke student reaches the mission without starting the timer early', asyn
   await expect(page.getByLabel('Mission controls')).toBeVisible();
   await expect(page.getByText('TEST MODE · submissions excluded')).toBeVisible();
   await expect(page.getByLabel('Movement joystick')).toBeVisible();
+});
+
+test('identification and real control practice fit a 1024 by 680 landscape viewport', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 680 });
+  await page.goto('/?test=1');
+  const continueButton = page.getByRole('button', { name: 'Continue to controls' });
+  await expect(continueButton).toBeDisabled();
+  await expect(continueButton).toBeInViewport();
+  for (const field of ['First name', 'Last initial', 'Class period']) {
+    const bounds = await page.getByLabel(field).boundingBox();
+    if (!bounds) throw new Error(`${field} was not visible.`);
+    expect(bounds.height).toBeGreaterThanOrEqual(56);
+  }
+  const periodContrast = await page.getByLabel('Class period').evaluate((element) => {
+    const style = getComputedStyle(element);
+    const parse = (value: string) => (value.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+    const luminance = (rgb: number[]) => {
+      const channels = rgb.map((value) => {
+        const normalized = value / 255;
+        return normalized <= 0.03928
+          ? normalized / 12.92
+          : Math.pow((normalized + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const light = luminance(parse(style.color));
+    const dark = luminance(parse(style.backgroundColor));
+    return (Math.max(light, dark) + 0.05) / (Math.min(light, dark) + 0.05);
+  });
+  expect(periodContrast).toBeGreaterThanOrEqual(4.5);
+
+  await page.getByLabel('First name').fill('Test');
+  await page.getByLabel('Last initial').fill('S');
+  await page.getByLabel('Class period').selectOption('1');
+  await expect(continueButton).toBeEnabled();
+  await continueButton.click();
+  await page.getByRole('radio', { name: /Touch Only/ }).click();
+  const start = page.getByRole('button', { name: 'Practice all controls to start' });
+  await expect(start).toBeInViewport();
+  for (const label of ['Large text', 'High contrast', 'Reduced motion', 'Mute sounds']) {
+    const bounds = await page.getByText(label, { exact: true }).locator('..').boundingBox();
+    if (!bounds) throw new Error(`${label} target was not visible.`);
+    expect(bounds.height).toBeGreaterThanOrEqual(56);
+  }
+  await completeControlPractice(page, true);
+  await expect(page.getByRole('button', { name: 'Start mission and timer' })).toBeInViewport();
+  const overflow = await page.evaluate(() => ({
+    horizontal: document.documentElement.scrollWidth - window.innerWidth,
+    vertical: document.documentElement.scrollHeight - window.innerHeight,
+  }));
+  expect(overflow.horizontal).toBeLessThanOrEqual(1);
+  expect(overflow.vertical).toBeLessThanOrEqual(1);
 });
 
 test('test tooling can exercise the full mission and final score', async ({ page }) => {
@@ -215,7 +274,8 @@ test('iPad-size controls stay touchable and do not overlap the joystick', async 
   await startMission(page, true);
   const joystick = await page.getByLabel('Movement joystick').boundingBox();
   if (!joystick) throw new Error('Joystick was not visible.');
-  for (const name of [
+  const controls = [
+    'Pause',
     'Overview',
     'Recenter',
     /Grade/,
@@ -223,19 +283,51 @@ test('iPad-size controls stay touchable and do not overlap the joystick', async 
     'Interact',
     'Place',
     'Remove selected',
-  ]) {
+  ];
+  for (const name of controls) {
     const button = page.getByRole('button', { name }).first();
     const bounds = await button.boundingBox();
     if (!bounds) throw new Error(`Missing control: ${String(name)}`);
+    expect(bounds.width).toBeGreaterThanOrEqual(56);
     expect(bounds.height).toBeGreaterThanOrEqual(56);
-    const overlaps = !(
-      joystick.x + joystick.width <= bounds.x ||
-      bounds.x + bounds.width <= joystick.x ||
-      joystick.y + joystick.height <= bounds.y ||
-      bounds.y + bounds.height <= joystick.y
+    expect(overlaps(joystick, bounds), `${String(name)} overlaps the movement joystick`).toBe(
+      false,
     );
-    expect(overlaps, `${String(name)} overlaps the movement joystick`).toBe(false);
+    const hitTarget = await page.evaluate(
+      ({ x, y }) => {
+        const hit = document.elementFromPoint(x, y);
+        return hit?.closest('button')?.textContent?.trim() ?? '';
+      },
+      { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 },
+    );
+    expect(hitTarget).toContain(typeof name === 'string' ? name : 'Grade');
   }
+  const regions = await Promise.all(
+    ['.utility-cluster', '.hotbar', '.action-cluster'].map(async (selector) => {
+      const bounds = await page.locator(selector).boundingBox();
+      if (!bounds) throw new Error(`Missing HUD region: ${selector}`);
+      return { selector, bounds };
+    }),
+  );
+  for (let left = 0; left < regions.length; left += 1) {
+    for (let right = left + 1; right < regions.length; right += 1) {
+      expect(
+        overlaps(regions[left].bounds, regions[right].bounds),
+        `${regions[left].selector} overlaps ${regions[right].selector}`,
+      ).toBe(false);
+    }
+  }
+  await page.getByRole('button', { name: 'Place' }).click();
+  await expect(page.getByText('Collect a module from a supply depot first.')).toBeVisible();
+  const virtualJoystick = page.getByLabel('Movement joystick');
+  await virtualJoystick.dispatchEvent('pointerdown', { pointerId: 21, clientX: 70, clientY: 500 });
+  await expect(virtualJoystick).toHaveClass(/is-active/);
+  await virtualJoystick.dispatchEvent('lostpointercapture', { pointerId: 21 });
+  await expect(virtualJoystick).not.toHaveClass(/is-active/);
+  const horizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
 });
 
 test('touch-only accessibility settings keep the overview usable at iPad size', async ({
