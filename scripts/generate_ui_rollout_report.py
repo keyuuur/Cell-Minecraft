@@ -84,11 +84,27 @@ CAPTIONS = {
     ),
 }
 
+DIAGNOSTIC_CAPTIONS = {
+    "diagnostic-placement-blocked.png": (
+        "Appendix A. Blocked placement guide",
+        "Immediately after collection, the wall module remains blocked until visible movement "
+        "reaches the outer wall zone. Shape, dashed border, text, and a disabled Place control "
+        "communicate the blocked state without relying on color alone.",
+    ),
+    "diagnostic-placement-valid.png": (
+        "Appendix B. Valid placement guide",
+        "After visible movement, the guide names the OUTER WALL ZONE, changes to a check/double "
+        "pattern, and enables the contextual Place action. The collection, objective, and zone "
+        "instructions now agree.",
+    ),
+}
+
 PHASE_LABELS = {
     "baseline": "BASELINE EVIDENCE",
     "visual-pass-1": "VISUAL PASS 1 EVIDENCE",
     "visual-pass-2": "VISUAL PASS 2 EVIDENCE",
     "visual-pass-3": "VISUAL PASS 3 EVIDENCE",
+    "pass-2-candidate": "VISUAL PASS 2 CANDIDATE",
 }
 
 CHECKPOINT_HIGHLIGHTS = {
@@ -115,6 +131,12 @@ CHECKPOINT_HIGHLIGHTS = {
         "Practice and delivery status remain clear without exposing student identity.",
         "The final Preview flow preserves the same visible-control mission evidence.",
         "Production remains unpromoted pending the physical school-iPad gates.",
+    ],
+    "pass-2-candidate": [
+        "Active depots, named zones, and selected/installed/repair states clarify the next action.",
+        "Cumulative structures remain visible through distinct outer wall and inner membrane cues.",
+        "Function feedback, drought, wilt, and recovery stay at the approved Unit 1 depth.",
+        "Reload, correction, placement, graphics, and exact-one submission gates passed.",
     ],
 }
 
@@ -186,6 +208,12 @@ def verified_manifest(run_dir: Path) -> dict:
         digest = hashlib.sha256(image_path.read_bytes()).hexdigest()
         if digest != item["sha256"]:
             raise ValueError(f"Hash mismatch: {item['filename']}")
+    diagnostics = manifest.get("diagnosticScreenshots", [])
+    for item in diagnostics:
+        image_path = run_dir / item["filename"]
+        digest = hashlib.sha256(image_path.read_bytes()).hexdigest()
+        if digest != item["sha256"]:
+            raise ValueError(f"Hash mismatch: {item['filename']}")
     return manifest
 
 
@@ -235,12 +263,22 @@ def draw_cover(
     pdf.setFillColor(PANEL)
     pdf.roundRect(42, y - 154, width - 84, 154, 12, fill=1, stroke=0)
     pdf.setFillColor(INK)
+    control_label = {
+        "keyboard-touch": "Keyboard + Touch",
+        "touch-only": "Touch Only",
+    }.get(manifest["controls"], manifest["controls"].replace("-", " ").title())
     rows = [
-        ("Profile", f"{manifest['engine']} · {manifest['viewport']['width']}×{manifest['viewport']['height']} · {manifest['controls'].replace('-', ' ').title()}"),
+        (
+            "Profile",
+            f"{manifest['engine']} · {manifest['viewport']['width']}×{manifest['viewport']['height']} · {control_label}",
+        ),
         ("App checkpoint", manifest["appBaseSha"][:12]),
         ("Evidence commit", evidence_sha[:12]),
         ("Errors", f"{len(manifest['pageErrors'])} page · {len(manifest['consoleErrors'])} console"),
-        ("Panels", "11 numbered panels · 12 verified PNG files"),
+        (
+            "Panels",
+            f"11 numbered panels · 12 core PNGs · {len(manifest.get('diagnosticScreenshots', []))} appendices",
+        ),
         ("Submission", submission_summary),
     ]
     row_y = y - 25
@@ -327,6 +365,12 @@ def main() -> None:
         pdf.showPage()
         filename = item["filename"]
         title, caption = CAPTIONS[filename]
+        draw_screenshot_page(pdf, page_number, run_dir / filename, title, caption)
+        page_number += 1
+    for item in manifest.get("diagnosticScreenshots", []):
+        pdf.showPage()
+        filename = item["filename"]
+        title, caption = DIAGNOSTIC_CAPTIONS[filename]
         draw_screenshot_page(pdf, page_number, run_dir / filename, title, caption)
         page_number += 1
     pdf.save()
