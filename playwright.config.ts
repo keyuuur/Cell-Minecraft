@@ -3,11 +3,13 @@ import { defineConfig, devices } from '@playwright/test';
 const externalBaseURL = process.env.E2E_BASE_URL;
 const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 const projectPreviewSuffix = '-keyur159263-5904s-projects.vercel.app';
+const productionHostname = 'cell-minecraft.vercel.app';
 
 function isApprovedVercelHost(hostname: string): boolean {
   return (
-    hostname === 'cell-minecraft.vercel.app' ||
-    (hostname.startsWith('cell-minecraft-') && hostname.endsWith(projectPreviewSuffix))
+    hostname !== productionHostname &&
+    hostname.startsWith('cell-minecraft-') &&
+    hostname.endsWith(projectPreviewSuffix)
   );
 }
 
@@ -20,7 +22,7 @@ if (vercelBypassSecret) {
 
   if (target.protocol !== 'https:' || !isApprovedVercelHost(target.hostname)) {
     throw new Error(
-      'The Vercel automation bypass can only be sent to an approved HTTPS Cell Minecraft Vercel host.',
+      'The Vercel automation bypass can only be sent to an approved HTTPS Cell Minecraft Preview host; Production is forbidden.',
     );
   }
 }

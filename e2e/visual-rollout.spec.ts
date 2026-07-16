@@ -55,6 +55,8 @@ const appBaseSha =
 const evidenceSha = process.env.VISUAL_EVIDENCE_SHA ?? 'working-tree';
 const runNumber = Number(runId);
 const isCountedRun = Number.isInteger(runNumber) && runNumber > 0;
+const projectPreviewSuffix = '-keyur159263-5904s-projects.vercel.app';
+const productionHostname = 'cell-minecraft.vercel.app';
 const forceReloadRecovery = process.env.VISUAL_FORCE_RELOAD === 'true';
 const accessibilityAudit =
   process.env.VISUAL_LARGE_TEXT === 'true' &&
@@ -65,15 +67,36 @@ const pass3Diagnostics = visualPass === 'visual-pass-3';
 const defaultYaw = 2.16;
 const recenterPosition: Point2 = { x: -18, z: 10 };
 
-async function authorizeProtectedPreview(page: Page): Promise<void> {
-  if (!liveSubmission) return;
+function getProtectedPreviewTarget(): URL | null {
+  if (!externalBaseURL && !vercelBypassSecret) return null;
   if (!externalBaseURL || !vercelBypassSecret) {
     throw new Error(
-      'Live visual evidence requires E2E_BASE_URL and VERCEL_AUTOMATION_BYPASS_SECRET.',
+      'Protected Preview evidence requires both E2E_BASE_URL and VERCEL_AUTOMATION_BYPASS_SECRET.',
     );
   }
 
-  const bootstrap = await page.context().request.get(externalBaseURL, {
+  const target = new URL(externalBaseURL);
+  const approvedPreviewHost =
+    target.hostname !== productionHostname &&
+    target.hostname.startsWith('cell-minecraft-') &&
+    target.hostname.endsWith(projectPreviewSuffix);
+  if (target.protocol !== 'https:' || !approvedPreviewHost) {
+    throw new Error(
+      'Visual evidence may target only an approved HTTPS Cell Minecraft Preview host; Production is forbidden.',
+    );
+  }
+  if (liveSubmission && runNumber !== 5) {
+    throw new Error('Live visual submission is restricted to counted Run 5.');
+  }
+  return target;
+}
+
+const protectedPreviewTarget = getProtectedPreviewTarget();
+
+async function authorizeProtectedPreview(page: Page): Promise<void> {
+  if (!protectedPreviewTarget || !vercelBypassSecret) return;
+
+  const bootstrap = await page.context().request.get(protectedPreviewTarget.toString(), {
     headers: {
       'x-vercel-protection-bypass': vercelBypassSecret,
       'x-vercel-set-bypass-cookie': 'true',
@@ -86,7 +109,7 @@ async function authorizeProtectedPreview(page: Page): Promise<void> {
     throw new Error('Vercel did not return the expected automation-bypass cookie.');
   }
 
-  const cookies = await page.context().cookies(externalBaseURL);
+  const cookies = await page.context().cookies(protectedPreviewTarget.toString());
   if (cookies.length === 0) {
     throw new Error(
       'The protected Preview bypass cookie was not installed in the browser context.',
