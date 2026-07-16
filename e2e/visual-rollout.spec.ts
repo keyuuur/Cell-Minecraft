@@ -36,6 +36,8 @@ interface SubmissionReceiptProbe {
 
 const runId = process.env.VISUAL_RUN_ID;
 const visualPass = process.env.VISUAL_PASS ?? 'baseline';
+const externalBaseURL = process.env.E2E_BASE_URL;
+const vercelBypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 const controlProfile = (process.env.VISUAL_CONTROL_PROFILE ?? 'touch-only') as ControlProfile;
 const viewportWidth = Number(process.env.VISUAL_VIEWPORT_WIDTH ?? 1024);
 const viewportHeight = Number(process.env.VISUAL_VIEWPORT_HEIGHT ?? 768);
@@ -60,17 +62,58 @@ const pass3Diagnostics = visualPass === 'visual-pass-3';
 const defaultYaw = 2.16;
 const recenterPosition: Point2 = { x: -18, z: 10 };
 
+async function authorizeProtectedPreview(page: Page): Promise<void> {
+  if (!liveSubmission) return;
+  if (!externalBaseURL || !vercelBypassSecret) {
+    throw new Error(
+      'Live visual evidence requires E2E_BASE_URL and VERCEL_AUTOMATION_BYPASS_SECRET.',
+    );
+  }
+
+  const bootstrap = await page.context().request.get(externalBaseURL, {
+    headers: {
+      'x-vercel-protection-bypass': vercelBypassSecret,
+      'x-vercel-set-bypass-cookie': 'true',
+    },
+    maxRedirects: 0,
+  });
+  const receivedBypassCookie = Boolean(bootstrap.headers()['set-cookie']);
+  await bootstrap.dispose();
+  if (!receivedBypassCookie) {
+    throw new Error('Vercel did not return the expected automation-bypass cookie.');
+  }
+
+  const cookies = await page.context().cookies(externalBaseURL);
+  if (cookies.length === 0) {
+    throw new Error(
+      'The protected Preview bypass cookie was not installed in the browser context.',
+    );
+  }
+}
+
 if (isCountedRun) {
   if (!/^[0-9a-f]{40}$/i.test(evidenceSha)) {
     throw new Error('Counted runs require a full committed VISUAL_EVIDENCE_SHA.');
   }
+  if (!/^[0-9a-f]{40}$/i.test(appBaseSha)) {
+    throw new Error('Counted runs require a full committed VISUAL_APP_BASE_SHA.');
+  }
   try {
     execFileSync('git', ['cat-file', '-e', `${evidenceSha}^{commit}`]);
+    execFileSync('git', ['cat-file', '-e', `${appBaseSha}^{commit}`]);
     execFileSync('git', ['merge-base', '--is-ancestor', evidenceSha, 'HEAD']);
-    execFileSync('git', ['diff', '--quiet', evidenceSha, '--', 'e2e/visual-rollout.spec.ts']);
+    execFileSync('git', ['merge-base', '--is-ancestor', evidenceSha, appBaseSha]);
+    execFileSync('git', [
+      'diff',
+      '--quiet',
+      evidenceSha,
+      '--',
+      'e2e/visual-rollout.spec.ts',
+      'playwright.config.ts',
+    ]);
   } catch {
     throw new Error(
-      'Counted runs require the current visual driver to match an ancestor evidence commit.',
+      'Counted runs require committed app/evidence SHAs and an unchanged ancestor visual harness.',
     );
   }
 }
@@ -819,7 +862,24 @@ test.describe('real-control visual rollout evidence', () => {
     let submissionProbe: SubmissionProbe | null = null;
     let favicon404Seen = false;
     let graphicsContextChecks = 0;
+    let graphicsContextLossEvents = 0;
     const semanticAssertions: string[] = [];
+
+    await page.exposeFunction('__recordVisualWebglContextLoss', () => {
+      graphicsContextLossEvents += 1;
+    });
+    await page.addInitScript(() => {
+      window.addEventListener(
+        'webglcontextlost',
+        () => {
+          const record = (
+            window as Window & { __recordVisualWebglContextLoss?: () => Promise<void> }
+          ).__recordVisualWebglContextLoss;
+          void record?.();
+        },
+        true,
+      );
+    });
 
     page.on('pageerror', (error) => pageErrors.push(error.message));
     page.on('response', (response) => {
@@ -862,6 +922,8 @@ test.describe('real-control visual rollout evidence', () => {
       });
     }
 
+    await authorizeProtectedPreview(page);
+    if (liveSubmission) semanticAssertions.push('protected Preview bypass cookie installed');
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Build a Living Cell' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Advance test stage' })).toHaveCount(0);
@@ -1206,6 +1268,7 @@ test.describe('real-control visual rollout evidence', () => {
     expect(submissionReceipt?.matchesRequest, 'receipt matches transient attempt ID').toBe(true);
     await page.waitForTimeout(1_000);
     expect(submissionCallCount, 'submission request remains exactly one').toBe(1);
+    expect(graphicsContextLossEvents, 'WebGL context-loss events').toBe(0);
 
     const finishedAt = new Date();
     const manifest = {
@@ -1238,7 +1301,11 @@ test.describe('real-control visual rollout evidence', () => {
       submissionMode: liveSubmission ? 'preview-forced-test' : 'intercepted-synthetic',
       submissionOutcome: submissionReceipt.status,
       submissionCallCount,
-      graphicsContextGate: { status: 'passed', checks: graphicsContextChecks },
+      graphicsContextGate: {
+        status: 'passed',
+        checks: graphicsContextChecks,
+        lossEvents: graphicsContextLossEvents,
+      },
       outcome: 'success',
     };
     await writeFile(
