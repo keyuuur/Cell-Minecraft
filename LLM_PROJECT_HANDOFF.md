@@ -1,6 +1,6 @@
 # Build a Living Cell — LLM Project Handoff
 
-Last updated: 2026-07-14
+Last updated: 2026-07-16
 
 ## 1. Project purpose and classroom audience
 
@@ -53,6 +53,7 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Verified release-test checkpoint: `15fe51f` (`Add protected preview verification`).
 - Verified live-backend runtime fix: `a1f01d8` (`fix: load Vercel submission validation at runtime`).
 - Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The live-backend runtime fix was pushed on 2026-07-14. Unrelated local edits to `AGENTS.md` and `KEYUR_WORKFLOW.md` remain outside project commits.
+- Five-run UI rollout harness checkpoint: local commit `5d37e28` (`test: harden visible-control rollout route`). It follows harness scaffold commit `c7fabd8` and retains application baseline `43ebed6`. These rollout commits are intentionally pending the Run 1 checkpoint push. The user-owned `AGENTS.md` and `KEYUR_WORKFLOW.md` edits remain unstaged and excluded.
 - Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. The protected `codex/build-a-living-cell` preview from `a1f01d8` is Ready at `https://cell-minecraft-git-codex-buil-5bd946-keyur159263-5904s-projects.vercel.app`. Its Apps Script URL and proxy key are Sensitive, Preview-only environment values; Production was not configured or promoted.
 - Google backend: the school-owned Sheet `Build a Living Cell - Results` is private to the owner and contains only `RawSubmissions` and `BestResults`. The matching Apps Script backend is deployed as a web app that executes as the owner and accepts anonymous requests while enforcing the proxy key and payload validation. No Google Sheet ID, Apps Script deployment URL, proxy key, account credentials, or other backend secret is stored in this handoff.
 
@@ -95,18 +96,31 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 - Live synthetic accepted/idempotency test passed through Preview `/api/submit` -> Apps Script -> private Sheet. The first request returned HTTP 200 with an accepted receipt. Repeating the same `attemptId` returned the original accepted receipt and server timestamp.
 - Sheet verification showed one 18-column raw data row, score 100, and `IsTest=TRUE`. `BestResults` remained header-only with zero data rows, proving that the Preview-forced test flag and test-row exclusion worked. No real student data was submitted.
 
+### Counted UI rollout Run 1 — verified 2026-07-16
+
+- Status: **passed and counted as 1 of 5**. Visual passes remain 0 of 3. Rollout emails remain 0 of 6 until the verified report is sent after this checkpoint is pushed.
+- Application baseline: `43ebed6fe7658ea476c5a58b143a8c288ce0db73`. Evidence harness: `5d37e28bd22921348cd6ba770d52cea65a856be0`.
+- Profile: local iPad-landscape WebKit browser emulation, 1024 × 768, Touch Only, standard settings. This is not physical-iPad evidence.
+- Evidence: `output/playwright/ui-rollout-2026-07-15/00-baseline/run-01-counted/` contains 12 original PNGs for the required 11 report panels plus a redacted `run.json`. All listed SHA-256 hashes match; no identity, attempt/session ID, recipient, private URL, token, credential, or student data is recorded.
+- Real-control gates passed: visible tutorial practice, Pause/Resume with stable active time, Remove/replace/reinspect with full-credit restoration, nearby Inspect + Interact function evidence, drought/recovery, and visible final submission.
+- Submission gate passed through a local synthetic intercept: exactly one request, a nonempty transient attempt ID held only in memory, completed status, score 100, and a matching accepted receipt. No external Sheet row was created by Run 1.
+- Graphics gate passed two explicit live WebGL/WebGL2 context checks with no context-loss overlay. No page errors, unapproved console errors, or failed semantic gates were recorded. Mission-ready time was 1,813 ms.
+- The 13-page mobile report `output/pdf/build-a-living-cell-ui-rollout-run-01-baseline.pdf` was rendered back to PNG and every page was inspected at original resolution. It has no clipping, overlap, missing report text, black boxes, or unreadable report content. Apparent black regions in multi-image previews were viewer delta artifacts, not source-file defects.
+- Checkpoint verification: formatting, lint, TypeScript, 36/36 unit/component/API tests, and production build passed. The complete desktop Chromium mission matrix passed 11/11. A three-worker WebKit run saturated the emulated renderer to 0–7 FPS and timed out three cases; the required isolated iPad-landscape matrix then passed 11/11 with one worker, confirming resource contention rather than a mission failure.
+
 ## 7. Current active phase and exact remaining work
 
-Active phase: **release-readiness checkpoint and external integration**.
+Active phase: **Five-Run, Three-Pass Swarm UI Rollout — Visual Pass 1**.
 
-Remaining work, in order:
+Remaining rollout work, in order:
 
-1. Run the remaining live negative/resilience cases before real-student use: rejected payload, queued replay after a transient transport failure, and concurrent duplicate attempts. Accepted receipt, duplicate idempotency, one-row persistence, and test-row exclusion are already verified live.
-2. Choose a supervised physical-iPad access route: a shareable link, temporary project access change, or the eventual production URL.
-3. Complete the physical-device, school-network, and classroom checks in `docs/CLASSROOM_RELEASE_CHECKLIST.md`.
-4. Resolve the shared-iPad privacy question for pending submissions: the queue must retain enough identity to deliver an offline attempt, but a new student must not see or inherit the prior student's identity or submission state.
-5. Replace procedural prototype organelles with optimized original glTF prefabs and add optional original audio only after the hard physical-iPad performance gate passes. No audio may carry unique information.
-6. Promote to production only after the external gates pass.
+1. Commit and push this verified Run 1 checkpoint, then send Email 1 with the inspected PDF.
+2. Visual Pass 1: correct identification contrast/disabled state, tutorial overflow and drag affordance, HUD/hotbar/action overlap, 56px critical targets, and the incorrect Overview/function instruction. Do not redesign scene art, scoring, mission rules, or Results.
+3. Counted Run 2: local iPad WebKit, 1024 × 680, Touch Only; verify no clipping/overlap, 56px critical targets, and one obvious next action. Review, report, commit/push, and send Email 2.
+4. Visual Pass 2 and counted Runs 3–4: improve chamber wayfinding, module selection, placement, structure-specific function evidence, drought/recovery cues, and accessibility validation; correct only Run 3 failures before Run 4.
+5. Visual Pass 3 and counted Run 5: polish dialogs, Overview, hints, grade breakdown, pause, results, practice, delivery status, and cohesion; verify the protected Preview and real synthetic backend path without promoting Production.
+6. Complete the final swarm audit, final handoff/commit/push, and Email 6.
+7. After the rollout, retain the pre-release external gates: live negative/retry/concurrency backend cases, shared-iPad pending-identity privacy, supervised physical-iPad access, physical device/network/student evidence, and post-device-gate asset/audio work.
 
 ## 8. Known risks, failures, and blockers
 
@@ -119,6 +133,8 @@ Remaining work, in order:
 - **Rate limiting:** Apps Script rate limiting is best effort, not an authentication boundary. Assignment tokens remain routing data rather than secrets.
 - **Shared-iPad privacy risk:** a pending delivery necessarily preserves the earlier attempt payload, including its student identity, until a receipt arrives. Before classroom use, verify that starting a new student session cannot display or attach that prior identity while background delivery continues.
 - **Asset gate:** current visuals are original, efficient procedural low-poly assets. Optimized original glTF prefabs and optional audio remain a post-device-gate release task.
+- **Run 1 baseline usability findings:** hotbar/action overlap, below-fold tutorial completion, unreadable WebKit period placeholder, an incorrect Overview instruction for function credit, and an undersized Overview close control are mandatory Visual Pass 1 corrections.
+- **Run 1 baseline scene findings:** generic function feedback, oversized/ambiguous ribosome geometry, and faint or occluded depot labels are deferred to Visual Pass 2. The text-heavy Overview and slightly tall Results screen are bounded Visual Pass 3 targets.
 
 ## 9. Swarm review findings and coordinator decisions
 
@@ -144,6 +160,7 @@ Final re-gate results:
 - **Classroom game fit: GO for code.** The reviewer verified real control practice, spatial function inspection, active-depot guidance, placement feedback, immutable results, practice exit, modal keyboard behavior, and the iPad accommodation matrix. Physical classroom release remains conditional on real-device/network/student evidence.
 - **Technical release: GO for scoped commit/push.** The final cross-student queue flaw was corrected, its requested regression passes in both browser profiles, and the coordinator reran the isolated full browser gate: 22/22 passed. Live backend, Vercel, network, and physical-device gates remain external blockers rather than code blockers.
 - **2026-07-14 backend swarm checkpoint:** Biology/content review found the synthetic payload stayed inside the approved eight-structure Unit 1 scope. Deployment review approved the private school-owned Sheet, Preview-only secrets, and original-receipt idempotency rule. Classroom review approved synthetic-only testing but kept real-student release blocked on the shared-iPad pending-identity risk and physical classroom evidence.
+- **2026-07-16 counted Run 1 checkpoint:** independent QA and Student UX reviewers approved the 12 original PNGs and redacted manifest as the required 11-panel baseline. Both prioritized the same Pass 1 corrections: hotbar/action separation, a compact landscape tutorial, a readable period selector, direct Inspect + Interact guidance, and 56px critical controls. They rejected apparent multi-image black-patch artifacts after inspecting original PNGs. Lower-priority structure identity, depot readability, function-specific cues, and Overview density remain assigned to their approved later passes.
 
 ## 10. Future phase sequence and acceptance gates
 
@@ -173,7 +190,7 @@ Failed gates trigger correction and retest. No user approval is needed between t
 1. Read current user instructions, the nearest `AGENTS.md`, `KEYUR_WORKFLOW.md`, and this file completely.
 2. Verify `git status`, current branch, HEAD/upstream, package lock, tests, GitHub Actions, deployment URLs, and backend state. Never trust stale prose over live evidence.
 3. Read the archived planning handoff only when a historical decision is missing here.
-4. Resume at the first unchecked item in section 7. Use read → plan → implement → test.
+4. Resume at the first unchecked item in section 7. Current counters are 1/5 counted runs, 0/3 visual passes, and 0/6 rollout emails until Email 1 is verified as sent. Use read → plan → implement → test.
 5. In swarm mode, keep one implementation owner and independent read-only reviewers; route disagreement through the coordinator.
 6. After a passed gate, update sections 5–11 before commit/push. Rewrite current state and retain replaced decisions only in the short dated log.
 7. Never record credentials, OAuth details, student submissions, private names, or machine-local configuration.
