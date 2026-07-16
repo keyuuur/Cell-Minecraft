@@ -68,7 +68,17 @@ const defaultYaw = 2.16;
 const recenterPosition: Point2 = { x: -18, z: 10 };
 
 function getProtectedPreviewTarget(): URL | null {
-  if (!externalBaseURL && !vercelBypassSecret) return null;
+  if (runNumber === 5 && !liveSubmission) {
+    throw new Error('Counted Run 5 requires VISUAL_LIVE=true.');
+  }
+  if (!externalBaseURL && !vercelBypassSecret) {
+    if (liveSubmission) {
+      throw new Error(
+        'Live visual submission requires an approved protected Preview target and bypass secret.',
+      );
+    }
+    return null;
+  }
   if (!externalBaseURL || !vercelBypassSecret) {
     throw new Error(
       'Protected Preview evidence requires both E2E_BASE_URL and VERCEL_AUTOMATION_BYPASS_SECRET.',
