@@ -24,7 +24,7 @@ interface DiagnosticEvidence {
 
 interface SubmissionProbe {
   attemptId: string;
-  isTest: boolean;
+  isTest: boolean | null;
   completed: boolean;
   total: number;
 }
@@ -939,7 +939,7 @@ test.describe('real-control visual rollout evidence', () => {
       submissionCallCount += 1;
       submissionProbe = {
         attemptId: typeof body.attemptId === 'string' ? body.attemptId : '',
-        isTest: body.isTest === true,
+        isTest: typeof body.isTest === 'boolean' ? body.isTest : null,
         completed: body.completed === true,
         total: typeof body.score?.total === 'number' ? body.score.total : Number.NaN,
       };
