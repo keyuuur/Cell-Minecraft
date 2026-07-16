@@ -1,14 +1,14 @@
 import { create } from 'zustand';
 import { calculateScore } from '../biology/scoring';
 import {
+  assessPlacement,
   canEstablishCytoplasm,
-  canPlaceStructure,
   createInitialMission,
   currentStage,
   isStructurePresent,
   PANEL_TARGET,
 } from '../biology/rules';
-import { ASSIGNMENT, REQUIRED_STRUCTURES } from '../data/assignment';
+import { ASSIGNMENT, REQUIRED_STRUCTURES, STRUCTURE_FUNCTIONS } from '../data/assignment';
 import type {
   AccessibilitySettings,
   ControlProfile,
@@ -25,6 +25,11 @@ import type {
 export type AppScreen = 'identify' | 'tutorial' | 'mission' | 'results';
 export type NearbyStation = StructureId | 'waterStation' | null;
 export type NearbyStructure = StructureId | null;
+export interface PlacementPreview {
+  status: 'valid' | 'blocked';
+  reason?: string;
+  zoneLabel: string;
+}
 
 interface GameStore {
   screen: AppScreen;
@@ -39,6 +44,7 @@ interface GameStore {
   selectedItem: StructureId | null;
   nearbyStation: NearbyStation;
   nearbyStructure: NearbyStructure;
+  placementPreview: PlacementPreview | null;
   hintsUsed: Record<number, number>;
   score: ScoreBreakdown;
   gradedScore: ScoreBreakdown | null;
@@ -57,6 +63,7 @@ interface GameStore {
   setPaused: (paused: boolean) => void;
   setNearbyStation: (station: NearbyStation) => void;
   setNearbyStructure: (structure: NearbyStructure) => void;
+  setPlacementPreview: (preview: PlacementPreview | null) => void;
   interact: () => void;
   selectItem: (item: StructureId | null) => void;
   placeSelected: (position: Point3) => void;
@@ -90,6 +97,16 @@ const stationLabel = (station: StructureId): string => {
   return labels[station];
 };
 
+const collectionPlacementGuidance = (station: StructureId): string => {
+  if (station === 'cellWall') {
+    return 'Move to the OUTER WALL ZONE, then select Place.';
+  }
+  if (station === 'cellMembrane') {
+    return 'Move just inside the wall to the INNER MEMBRANE ZONE, then select Place.';
+  }
+  return 'Move into a broad interior zone, then select Place.';
+};
+
 const withFeedback = (mission: MissionState, lastFeedback: string): MissionState => ({
   ...mission,
   lastFeedback,
@@ -115,6 +132,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   selectedItem: null,
   nearbyStation: null,
   nearbyStructure: null,
+  placementPreview: null,
   hintsUsed: {},
   score: emptyScore,
   gradedScore: null,
@@ -138,6 +156,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedItem: null,
       nearbyStation: null,
       nearbyStructure: null,
+      placementPreview: null,
       hintsUsed: {},
       score: emptyScore,
       gradedScore: null,
@@ -179,6 +198,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setPaused: (paused) => set({ paused }),
   setNearbyStation: (nearbyStation) => set({ nearbyStation }),
   setNearbyStructure: (nearbyStructure) => set({ nearbyStructure }),
+  setPlacementPreview: (placementPreview) => set({ placementPreview }),
   interact: () => {
     const state = get();
     const station = state.nearbyStation;
@@ -196,7 +216,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const mission = {
         ...state.mission,
         functionEvidence: { ...state.mission.functionEvidence, [structure]: true },
-        lastFeedback: `${stationLabel(structure)} function observed. A visible system signal appeared.`,
+        lastFeedback: `${stationLabel(structure)} observed — ${STRUCTURE_FUNCTIONS[structure]}`,
       };
       set(recalculate(mission));
       return;
@@ -222,7 +242,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         recoveryRestored: true,
         completed: false,
         lastFeedback:
-          'Water availability is restored. Open Overview to verify turgor and firmness.',
+          'External water is restored. The vacuole refilled, turgor rose, and the plant is firm again.',
         stageTimestamps: { ...state.mission.stageTimestamps, recovery: Date.now() },
       };
       set({ ...recalculate(mission), selectedItem: null });
@@ -254,11 +274,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const mission = {
       ...state.mission,
       collected: { ...state.mission.collected, [station]: true },
-      lastFeedback: `Collected ${stationLabel(station)}. Select Place when you are inside the cell.`,
+      lastFeedback: `Collected ${stationLabel(station)}. ${collectionPlacementGuidance(station)}`,
     };
     set({ mission, selectedItem: station });
   },
-  selectItem: (selectedItem) => set({ selectedItem }),
+  selectItem: (selectedItem) =>
+    set((state) => ({
+      selectedItem,
+      placementPreview: selectedItem === state.selectedItem ? state.placementPreview : null,
+    })),
   placeSelected: (position) => {
     const state = get();
     const selected = state.selectedItem;
@@ -266,17 +290,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ mission: withFeedback(state.mission, 'Collect a module from a supply depot first.') });
       return;
     }
+    if (selected === 'cytoplasm') return;
+    const placement = assessPlacement(state.mission, selected, position);
+    if (!placement.allowed) {
+      set({
+        mission: withFeedback(state.mission, placement.reason ?? 'That placement is blocked.'),
+      });
+      return;
+    }
     if (selected === 'cellWall') {
-      const radius = Math.hypot(position.x, position.z);
-      if (radius < 8.5 || radius > 12.5) {
-        set({
-          mission: withFeedback(
-            state.mission,
-            'Move to the chamber boundary before snapping a wall panel into place.',
-          ),
-        });
-        return;
-      }
       if (state.mission.wallPanels >= PANEL_TARGET) {
         set({ mission: withFeedback(state.mission, 'All six outside wall panels are installed.') });
         return;
@@ -290,26 +312,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
             ? 'Wall complete. Collect membrane panels for the inside layer.'
             : `Wall panel snapped into the outside frame (${wallPanels}/${PANEL_TARGET}).`,
       };
-      set({ ...recalculate(mission), selectedItem: wallPanels === PANEL_TARGET ? null : selected });
+      set({
+        ...recalculate(mission),
+        selectedItem: wallPanels === PANEL_TARGET ? null : selected,
+        placementPreview: wallPanels === PANEL_TARGET ? null : state.placementPreview,
+      });
       return;
     }
     if (selected === 'cellMembrane') {
-      if (state.mission.wallPanels < PANEL_TARGET) {
-        set({
-          mission: withFeedback(state.mission, 'The supporting wall must be built outside first.'),
-        });
-        return;
-      }
-      const radius = Math.hypot(position.x, position.z);
-      if (radius < 7.5 || radius > 11.5) {
-        set({
-          mission: withFeedback(
-            state.mission,
-            'Move to the inside boundary before snapping a membrane panel into place.',
-          ),
-        });
-        return;
-      }
       if (state.mission.membranePanels >= PANEL_TARGET) return;
       const membranePanels = state.mission.membranePanels + 1;
       const mission = {
@@ -323,14 +333,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({
         ...recalculate(mission),
         selectedItem: membranePanels === PANEL_TARGET ? null : selected,
-      });
-      return;
-    }
-    if (selected === 'cytoplasm') return;
-    const validation = canPlaceStructure(state.mission, selected, position);
-    if (!validation.allowed) {
-      set({
-        mission: withFeedback(state.mission, validation.reason ?? 'That placement is blocked.'),
+        placementPreview: membranePanels === PANEL_TARGET ? null : state.placementPreview,
       });
       return;
     }
@@ -355,7 +358,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const nextStage = currentStage(mission);
       mission.stageTimestamps = { ...mission.stageTimestamps, [nextStage]: Date.now() };
     }
-    set({ ...recalculate(mission), selectedItem: null });
+    set({ ...recalculate(mission), selectedItem: null, placementPreview: null });
   },
   removeSelected: () => {
     const state = get();
@@ -419,9 +422,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }
           : {}),
       },
-      'Structure removed. Replace it to restore full credit.',
+      `${stationLabel(selected)} removed — replace it, then reinspect to restore full credit.`,
     );
-    set({ ...recalculate(mission), selectedItem: null });
+    set({ ...recalculate(mission), selectedItem: selected, placementPreview: null });
   },
   openOverview: () => {
     const state = get();
@@ -520,6 +523,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeElapsedMs: save.activeElapsedMs,
       mission: save.mission,
       selectedItem: save.selectedItem,
+      placementPreview: null,
       hintsUsed: save.hintsUsed,
       score: calculateScore(save.mission),
       gradedScore: save.gradedScore ?? (save.mission.completionLocked ? save.score : null),
@@ -544,6 +548,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedItem: null,
       nearbyStation: null,
       nearbyStructure: null,
+      placementPreview: null,
       hintsUsed: {},
       score: emptyScore,
       gradedScore: null,

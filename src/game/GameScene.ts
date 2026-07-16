@@ -14,14 +14,21 @@ import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder.pure
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder.pure';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.pure';
 import { Scene } from '@babylonjs/core/scene.pure';
-import { canPlaceStructure } from '../biology/rules';
-import type { NearbyStation, NearbyStructure } from '../state/gameStore';
-import type { MissionState, Point3, QualityMode, StructureId } from '../types/game';
+import { activeStationIds, assessPlacement } from '../biology/rules';
+import type { NearbyStation, NearbyStructure, PlacementPreview } from '../state/gameStore';
+import type {
+  MissionState,
+  PlaceableStructureId,
+  Point3,
+  QualityMode,
+  StructureId,
+} from '../types/game';
 import { FixedGrid } from './FixedGrid';
 
 interface GameSceneCallbacks {
   onNearbyStation: (station: NearbyStation) => void;
   onNearbyStructure: (structure: NearbyStructure) => void;
+  onPlacementPreview: (preview: PlacementPreview | null) => void;
   onFps: (fps: number) => void;
   onContextLost: () => void;
 }
@@ -106,14 +113,22 @@ export class GameScene {
   private readonly callbacks: GameSceneCallbacks;
   private readonly occupancy = new FixedGrid(24, 12, 24);
   private readonly stationMaterials = new Map<string, StandardMaterial>();
+  private readonly stationLabelTextures = new Map<string, DynamicTexture>();
+  private readonly stationLabelMaterials = new Map<string, StandardMaterial>();
+  private readonly stationLabelMeshes = new Map<string, ReturnType<typeof CreatePlane>>();
   private missionMaterials: StandardMaterial[] = [];
+  private missionTextures: DynamicTexture[] = [];
   private currentMission: MissionState | null = null;
   private preview: ReturnType<typeof CreateBox> | null = null;
   private previewMaterial: StandardMaterial | null = null;
+  private previewValidMarker: ReturnType<typeof CreateTorus> | null = null;
+  private previewBlockedMarkers: Array<ReturnType<typeof CreateBox>> = [];
+  private lastPlacementPreviewKey = '';
   private selectedItem: StructureId | null = null;
   private joystick = { x: 0, z: 0 };
   private lastNearby: NearbyStation = null;
   private lastNearbyStructure: NearbyStructure = null;
+  private preferredStructure: PlaceableStructureId | null = null;
   private lastSemanticUpdate = 0;
   private lastFpsUpdate = 0;
   private pointerId: number | null = null;
@@ -197,6 +212,27 @@ export class GameScene {
     const material = standardMaterial(this.scene, name, color, alpha);
     this.missionMaterials.push(material);
     return material;
+  }
+
+  private missionBillboard(name: string, text: string, position: Vector3, color: string): void {
+    const texture = new DynamicTexture(
+      `${name}-texture`,
+      { width: 768, height: 128 },
+      this.scene,
+      false,
+    );
+    texture.hasAlpha = true;
+    texture.drawText(text, null, 84, 'bold 36px Arial', '#07110f', color, true, true);
+    this.missionTextures.push(texture);
+    const material = this.missionMaterial(`${name}-material`, Color3.White());
+    material.diffuseTexture = texture;
+    material.emissiveColor = Color3.White();
+    material.backFaceCulling = false;
+    const label = CreatePlane(name, { width: 7.6, height: 1.25 }, this.scene);
+    label.parent = this.missionRoot;
+    label.position = position;
+    label.billboardMode = 7;
+    label.material = material;
   }
 
   private createLab(): void {
@@ -295,14 +331,17 @@ export class GameScene {
       labelMaterial.diffuseTexture = labelTexture;
       labelMaterial.emissiveColor = Color3.White();
       labelMaterial.backFaceCulling = false;
+      this.stationLabelTextures.set(station.id, labelTexture);
+      this.stationLabelMaterials.set(station.id, labelMaterial);
       const label = CreatePlane(
         `station-label-${station.id}`,
-        { width: 4.6, height: 1.15 },
+        { width: 4.4, height: 0.96 },
         this.scene,
       );
-      label.position = station.position.add(new Vector3(0, 3.2, 0));
+      label.position = station.position.add(new Vector3(0, 4, 0));
       label.billboardMode = 7;
       label.material = labelMaterial;
+      this.stationLabelMeshes.set(station.id, label);
     }
 
     const wallMaterial = standardMaterial(
@@ -409,23 +448,38 @@ export class GameScene {
       let nearbyStructure: NearbyStructure = null;
       let structureDistance = 4.2;
       if (this.currentMission) {
-        for (const placement of Object.values(this.currentMission.placements)) {
-          if (!placement) continue;
-          const distanceToPlacement = Math.hypot(
-            this.camera.position.x - placement.position.x,
-            this.camera.position.z - placement.position.z,
+        const preferredPlacement = this.preferredStructure
+          ? this.currentMission.placements[this.preferredStructure]
+          : undefined;
+        if (preferredPlacement) {
+          const distanceToPreferred = Math.hypot(
+            this.camera.position.x - preferredPlacement.position.x,
+            this.camera.position.z - preferredPlacement.position.z,
           );
-          if (distanceToPlacement < structureDistance) {
-            nearbyStructure = placement.id;
-            structureDistance = distanceToPlacement;
+          const preferredInspectDistance = preferredPlacement.id === 'centralVacuole' ? 10.5 : 4.5;
+          if (distanceToPreferred < preferredInspectDistance) {
+            nearbyStructure = preferredPlacement.id;
+          }
+        }
+        if (!nearbyStructure) {
+          for (const placement of Object.values(this.currentMission.placements)) {
+            if (!placement) continue;
+            const distanceToPlacement = Math.hypot(
+              this.camera.position.x - placement.position.x,
+              this.camera.position.z - placement.position.z,
+            );
+            if (distanceToPlacement < structureDistance) {
+              nearbyStructure = placement.id;
+              structureDistance = distanceToPlacement;
+            }
           }
         }
         if (!nearbyStructure) {
           const radius = Math.hypot(this.camera.position.x, this.camera.position.z);
-          if (this.currentMission.wallPanels === 6 && Math.abs(radius - 10.5) < 1.3) {
-            nearbyStructure = 'cellWall';
-          } else if (this.currentMission.membranePanels === 6 && Math.abs(radius - 9.8) < 1.1) {
+          if (this.currentMission.membranePanels === 6 && Math.abs(radius - 9.65) < 0.62) {
             nearbyStructure = 'cellMembrane';
+          } else if (this.currentMission.wallPanels === 6 && Math.abs(radius - 10.5) < 0.7) {
+            nearbyStructure = 'cellWall';
           } else if (this.currentMission.cytoplasmEstablished && radius < 8) {
             nearbyStructure = 'cytoplasm';
           }
@@ -439,18 +493,28 @@ export class GameScene {
     if (this.preview && this.previewMaterial && this.currentMission && this.selectedItem) {
       const position = this.getPlacementPosition();
       this.preview.position = new Vector3(position.x, 0.5, position.z);
-      const radius = Math.hypot(position.x, position.z);
-      const valid =
-        this.selectedItem === 'cellWall'
-          ? radius >= 8.5 && radius <= 12.5
-          : this.selectedItem === 'cellMembrane'
-            ? this.currentMission.wallPanels === 6 && radius >= 7.5 && radius <= 11.5
-            : this.selectedItem === 'cytoplasm'
-              ? false
-              : canPlaceStructure(this.currentMission, this.selectedItem, position).allowed;
-      const color = Color3.FromHexString(valid ? '#a9ef69' : '#f06f5f');
+      this.previewValidMarker?.position.copyFrom(this.preview.position);
+      this.previewBlockedMarkers.forEach((marker) =>
+        marker.position.copyFrom(this.preview!.position),
+      );
+      const placement = assessPlacement(this.currentMission, this.selectedItem, position);
+      const color = Color3.FromHexString(placement.allowed ? '#a9ef69' : '#f06f5f');
       this.previewMaterial.diffuseColor = color;
       this.previewMaterial.emissiveColor = color.scale(0.45);
+      if (this.previewValidMarker) this.previewValidMarker.isVisible = placement.allowed;
+      this.previewBlockedMarkers.forEach((marker) => {
+        marker.isVisible = !placement.allowed;
+      });
+      const preview: PlacementPreview = {
+        status: placement.allowed ? 'valid' : 'blocked',
+        reason: placement.reason,
+        zoneLabel: placement.zoneLabel,
+      };
+      const previewKey = JSON.stringify(preview);
+      if (previewKey !== this.lastPlacementPreviewKey) {
+        this.lastPlacementPreviewKey = previewKey;
+        this.callbacks.onPlacementPreview(preview);
+      }
     }
     if (now - this.lastFpsUpdate > 1000) {
       this.lastFpsUpdate = now;
@@ -461,6 +525,10 @@ export class GameScene {
 
   syncMission(mission: MissionState): void {
     this.currentMission = mission;
+    this.preferredStructure =
+      Object.values(mission.placements)
+        .filter((placement): placement is NonNullable<typeof placement> => Boolean(placement))
+        .sort((left, right) => right.placedAt - left.placedAt)[0]?.id ?? null;
     this.occupancy.clear();
     for (let index = 0; index < mission.wallPanels; index += 1) {
       this.occupancy.set(index * 4, 1, 0, 1);
@@ -470,53 +538,78 @@ export class GameScene {
     }
     this.missionRoot.getChildMeshes().forEach((mesh) => mesh.dispose());
     this.missionMaterials.forEach((material) => material.dispose());
+    this.missionTextures.forEach((texture) => texture.dispose());
     this.missionMaterials = [];
-    const activeStation =
-      mission.wallPanels < 6
-        ? 'cellWall'
-        : mission.membranePanels < 6
-          ? 'cellMembrane'
-          : !mission.cytoplasmEstablished
-            ? 'cytoplasm'
-            : !mission.placements.nucleus
-              ? 'nucleus'
-              : !mission.placements.ribosomes
-                ? 'ribosomes'
-                : !mission.placements.mitochondria
-                  ? 'mitochondria'
-                  : !mission.placements.chloroplasts
-                    ? 'chloroplasts'
-                    : !mission.placements.centralVacuole
-                      ? 'centralVacuole'
-                      : mission.droughtObserved && !mission.recoveryRestored
-                        ? 'waterStation'
-                        : null;
+    this.missionTextures = [];
+    const activeStations = new Set(activeStationIds(mission));
     for (const [id, material] of this.stationMaterials) {
-      material.alpha = !activeStation || id === activeStation ? 1 : 0.38;
-      material.emissiveColor =
-        id === activeStation ? material.diffuseColor.scale(0.38) : Color3.Black();
+      const active = activeStations.has(id as StructureId | 'waterStation');
+      material.alpha = activeStations.size === 0 || active ? 1 : 0.38;
+      material.emissiveColor = active ? material.diffuseColor.scale(0.38) : Color3.Black();
+      const station = stationPositions.find((candidate) => candidate.id === id);
+      const texture = this.stationLabelTextures.get(id);
+      const labelMaterial = this.stationLabelMaterials.get(id);
+      const labelMesh = this.stationLabelMeshes.get(id);
+      if (station && texture && labelMaterial && labelMesh) {
+        const label = active ? `NEXT: ${station.label}` : station.label;
+        texture.drawText(
+          label,
+          null,
+          80,
+          `bold ${label.length > 19 ? 27 : label.length > 14 ? 31 : 37}px Arial`,
+          active ? '#102a24' : '#ffffff',
+          active ? '#d9ff63' : '#102a24',
+          true,
+          true,
+        );
+        labelMaterial.alpha = activeStations.size === 0 || active ? 1 : 0.55;
+        labelMesh.position.y = station.position.y + (active ? 5.1 : 4);
+        labelMesh.scaling.x = active ? 1.2 : 1;
+        labelMesh.scaling.y = active ? 1.08 : 1;
+      }
     }
-    if (activeStation) {
+    for (const activeStation of activeStations) {
       const target = stationPositions.find((station) => station.id === activeStation);
       if (target) {
-        const marker = CreateTorus(
-          'active-depot-marker',
-          { diameter: 4.1, thickness: 0.2, tessellation: 24 },
-          this.scene,
-        );
-        marker.parent = this.missionRoot;
-        marker.position = target.position.add(new Vector3(0, 0.15, 0));
         const markerMaterial = this.missionMaterial(
-          'active-depot-marker-material',
+          `active-depot-marker-material-${activeStation}`,
           Color3.FromHexString('#d9ff63'),
         );
         markerMaterial.emissiveColor = Color3.FromHexString('#9ec73d');
-        marker.material = markerMaterial;
+        for (const [index, diameter] of [4.1, 4.8].entries()) {
+          const marker = CreateTorus(
+            `active-depot-marker-${activeStation}-${index}`,
+            { diameter, thickness: index === 0 ? 0.2 : 0.1, tessellation: 24 },
+            this.scene,
+          );
+          marker.parent = this.missionRoot;
+          marker.position = target.position.add(new Vector3(0, 0.15, 0));
+          marker.material = markerMaterial;
+        }
+        for (const side of [-1, 1]) {
+          const chevron = CreateBox(
+            `active-depot-chevron-${activeStation}-${side}`,
+            { width: 0.18, height: 0.08, depth: 1.2 },
+            this.scene,
+          );
+          chevron.parent = this.missionRoot;
+          chevron.position = target.position.add(new Vector3(side * 2.35, 0.18, 0));
+          chevron.rotation.y = side * 0.7;
+          chevron.material = markerMaterial;
+        }
       }
     }
-    const wall = this.missionMaterial('cell-wall', Color3.FromHexString('#609347'), 0.9);
-    const membrane = this.missionMaterial('cell-membrane', Color3.FromHexString('#4ba7bb'), 0.7);
-    if (mission.functionEvidence.cellWall) wall.emissiveColor = Color3.FromHexString('#355d24');
+    const wall = this.missionMaterial('cell-wall', Color3.FromHexString('#609347'), 0.38);
+    const wallBrace = this.missionMaterial(
+      'cell-wall-brace',
+      Color3.FromHexString('#609347'),
+      0.92,
+    );
+    const membrane = this.missionMaterial('cell-membrane', Color3.FromHexString('#4ba7bb'), 0.28);
+    if (mission.functionEvidence.cellWall) {
+      wall.emissiveColor = Color3.FromHexString('#355d24');
+      wallBrace.emissiveColor = Color3.FromHexString('#355d24');
+    }
     if (mission.functionEvidence.cellMembrane)
       membrane.emissiveColor = Color3.FromHexString('#185267');
     const segmentWidth = 7.2;
@@ -525,22 +618,96 @@ export class GameScene {
       radius: number,
       material: StandardMaterial,
       prefix: string,
+      depth: number,
     ) => {
       for (let index = 0; index < count; index += 1) {
         const angle = (Math.PI * 2 * index) / 6;
         const panel = CreateBox(
           `${prefix}-${index}`,
-          { width: segmentWidth, height: 6, depth: 0.45 },
+          { width: segmentWidth, height: 6, depth },
           this.scene,
         );
         panel.parent = this.missionRoot;
         panel.position = new Vector3(Math.sin(angle) * radius, 3.2, Math.cos(angle) * radius);
         panel.rotation.y = angle;
         panel.material = material;
+        if (prefix === 'wall-panel') {
+          for (const offset of [-2.6, 2.6]) {
+            const brace = CreateBox(
+              `${prefix}-brace-${index}-${offset}`,
+              { width: 0.32, height: 6.4, depth: 0.82 },
+              this.scene,
+            );
+            brace.parent = this.missionRoot;
+            brace.position = panel.position.add(
+              new Vector3(Math.cos(angle) * offset, 0, -Math.sin(angle) * offset),
+            );
+            brace.rotation.y = angle;
+            brace.material = wallBrace;
+          }
+        } else {
+          for (const verticalOffset of [-1.5, 1.5]) {
+            const band = CreateBox(
+              `${prefix}-band-${index}-${verticalOffset}`,
+              { width: segmentWidth, height: 0.16, depth: 0.36 },
+              this.scene,
+            );
+            band.parent = this.missionRoot;
+            band.position = panel.position.add(new Vector3(0, verticalOffset, 0));
+            band.rotation.y = angle;
+            band.material = material;
+          }
+        }
       }
     };
-    makeRing(mission.wallPanels, 10.5, wall, 'wall-panel');
-    makeRing(mission.membranePanels, 9.8, membrane, 'membrane-panel');
+    makeRing(mission.wallPanels, 10.5, wall, 'wall-panel', 0.76);
+    makeRing(mission.membranePanels, 9.65, membrane, 'membrane-panel', 0.2);
+
+    const selectedZone = this.selectedItem;
+    const wallZoneMaterial = this.missionMaterial(
+      'wall-zone-guide-material',
+      selectedZone === 'cellWall'
+        ? Color3.FromHexString('#d9ff63')
+        : Color3.FromHexString('#78926d'),
+      selectedZone === 'cellWall' ? 0.72 : 0.28,
+    );
+    const membraneZoneMaterial = this.missionMaterial(
+      'membrane-zone-guide-material',
+      selectedZone === 'cellMembrane'
+        ? Color3.FromHexString('#d9ff63')
+        : Color3.FromHexString('#67b6d1'),
+      selectedZone === 'cellMembrane' ? 0.72 : 0.28,
+    );
+    for (const [name, diameter, thickness, material] of [
+      ['outer-wall-zone', 21, 0.32, wallZoneMaterial],
+      ['inner-membrane-zone-a', 19.4, 0.12, membraneZoneMaterial],
+      ['inner-membrane-zone-b', 18.8, 0.12, membraneZoneMaterial],
+    ] as const) {
+      const guide = CreateTorus(name, { diameter, thickness, tessellation: 32 }, this.scene);
+      guide.parent = this.missionRoot;
+      guide.position.y = 0.46;
+      guide.material = material;
+    }
+    const centralGuideMaterial = this.missionMaterial(
+      'central-zone-guide-material',
+      selectedZone === 'centralVacuole'
+        ? Color3.FromHexString('#d9ff63')
+        : Color3.FromHexString('#5bc0d0'),
+      selectedZone === 'centralVacuole' ? 0.78 : 0.24,
+    );
+    for (const x of [-4, 4]) {
+      for (const z of [-4, 4]) {
+        const bracket = CreateBox(
+          `central-zone-bracket-${x}-${z}`,
+          { width: 1.3, height: 0.08, depth: 0.28 },
+          this.scene,
+        );
+        bracket.parent = this.missionRoot;
+        bracket.position = new Vector3(x, 0.48, z);
+        bracket.rotation.y = x === z ? Math.PI / 4 : -Math.PI / 4;
+        bracket.material = centralGuideMaterial;
+      }
+    }
 
     if (mission.cytoplasmEstablished) {
       const cytoplasm = CreateCylinder(
@@ -582,8 +749,24 @@ export class GameScene {
         nuclearMembrane.material = this.missionMaterial(
           'nuclear-membrane-material',
           Color3.FromHexString('#cdb8df'),
-          0.3,
+          0.14,
         );
+        for (const axis of ['x', 'y', 'z'] as const) {
+          const membraneBand = CreateTorus(
+            `nuclear-membrane-band-${axis}`,
+            { diameter: 3.8, thickness: 0.07, tessellation: 20 },
+            this.scene,
+          );
+          membraneBand.parent = this.missionRoot;
+          membraneBand.position = position;
+          if (axis === 'x') membraneBand.rotation.x = Math.PI / 2;
+          if (axis === 'z') membraneBand.rotation.z = Math.PI / 2;
+          membraneBand.material = this.missionMaterial(
+            `nuclear-membrane-band-material-${axis}`,
+            Color3.FromHexString('#d8c3e8'),
+            0.76,
+          );
+        }
       } else if (placement.id === 'ribosomes') {
         for (let i = 0; i < 12; i += 1) {
           const ribosome = CreateSphere(
@@ -615,21 +798,57 @@ export class GameScene {
             ? Color3.FromHexString('#df704f')
             : Color3.FromHexString('#4f9a4e'),
         );
+        const bandCount = placement.id === 'mitochondria' ? 3 : 2;
+        for (let index = 0; index < bandCount; index += 1) {
+          const band = CreateTorus(
+            `${placement.id}-band-${index}`,
+            {
+              diameter: placement.id === 'mitochondria' ? 1.25 : 1.42,
+              thickness: placement.id === 'mitochondria' ? 0.08 : 0.13,
+              tessellation: 14,
+            },
+            this.scene,
+          );
+          band.parent = this.missionRoot;
+          band.position = position.add(new Vector3((index - (bandCount - 1) / 2) * 0.7, 0, 0));
+          band.rotation.z = Math.PI / 2;
+          band.material = this.missionMaterial(
+            `${placement.id}-band-material-${index}`,
+            placement.id === 'mitochondria'
+              ? Color3.FromHexString('#6f2e27')
+              : Color3.FromHexString('#b8e65f'),
+          );
+        }
       } else if (placement.id === 'centralVacuole') {
         const vacuole = CreateSphere(
           'central-vacuole',
-          { diameter: 6.8, segments: 18 },
+          { diameter: 5.2, segments: 14 },
           this.scene,
         );
         vacuole.parent = this.missionRoot;
-        vacuole.position = new Vector3(placement.position.x, 3.1, placement.position.z);
+        vacuole.position = new Vector3(placement.position.x, 2.7, placement.position.z);
         const wilted = mission.droughtStarted && !mission.recoveryRestored;
-        vacuole.scaling = new Vector3(wilted ? 0.72 : 1, wilted ? 0.55 : 1.1, wilted ? 0.72 : 1);
+        vacuole.scaling = new Vector3(wilted ? 0.72 : 1, wilted ? 0.55 : 1.08, wilted ? 0.72 : 1);
         vacuole.material = this.missionMaterial(
           'vacuole-material',
           wilted ? Color3.FromHexString('#5d7688') : Color3.FromHexString('#53b6cf'),
-          0.74,
         );
+        const waterLevelMaterial = this.missionMaterial(
+          'vacuole-water-level-material',
+          wilted ? Color3.FromHexString('#a6b3bd') : Color3.FromHexString('#d7fbff'),
+          0.88,
+        );
+        const waterLevels = wilted ? [-0.55] : [-0.75, 0.15, 1.05];
+        for (const [index, level] of waterLevels.entries()) {
+          const waterLevel = CreateTorus(
+            `vacuole-water-level-${index}`,
+            { diameter: wilted ? 2.8 : 4.4, thickness: 0.08, tessellation: 20 },
+            this.scene,
+          );
+          waterLevel.parent = this.missionRoot;
+          waterLevel.position = vacuole.position.add(new Vector3(0, level, 0));
+          waterLevel.material = waterLevelMaterial;
+        }
       }
       if (mission.functionEvidence[placement.id]) {
         const colors = {
@@ -654,6 +873,45 @@ export class GameScene {
         );
         signalMaterial.emissiveColor = Color3.FromHexString(colors[placement.id]);
         signal.material = signalMaterial;
+      }
+    }
+
+    for (const placement of Object.values(mission.placements)) {
+      if (!placement || placement.id !== this.preferredStructure) continue;
+      const buffer =
+        placement.id === 'centralVacuole'
+          ? 7
+          : placement.id === 'nucleus'
+            ? 4
+            : placement.id === 'ribosomes'
+              ? 3.2
+              : 4;
+      const offset = new Vector3(
+        this.camera.position.x - placement.position.x,
+        0,
+        this.camera.position.z - placement.position.z,
+      );
+      const distance = offset.length();
+      if (distance < buffer) {
+        const towardCenter = new Vector3(-placement.position.x, 0, -placement.position.z);
+        const centerDistance = towardCenter.length();
+        const direction =
+          placement.id !== 'centralVacuole' && centerDistance > 0.05
+            ? towardCenter.scale(1 / centerDistance)
+            : distance < 0.05
+              ? new Vector3(1, 0, 0)
+              : offset.scale(1 / distance);
+        this.camera.position.x = placement.position.x + direction.x * buffer;
+        this.camera.position.z = placement.position.z + direction.z * buffer;
+      }
+      if (distance <= buffer + 0.35) {
+        this.camera.setTarget(
+          new Vector3(
+            placement.position.x,
+            placement.id === 'centralVacuole' ? 2.7 : 1.5,
+            placement.position.z,
+          ),
+        );
       }
     }
 
@@ -684,23 +942,52 @@ export class GameScene {
           wilted ? Color3.FromHexString('#9b7446') : Color3.FromHexString('#61b95d'),
         );
       }
+      const statusText = wilted
+        ? 'EXTERNAL WATER LIMITED  |  WILTING'
+        : mission.recoveryRestored
+          ? 'WATER RESTORED  |  FIRM AGAIN'
+          : 'WATER STORED  |  FIRM';
+      this.missionBillboard(
+        'plant-status-label',
+        statusText,
+        new Vector3(0, 8.2, 10.8),
+        wilted ? '#ffbd72' : '#b8e65f',
+      );
     }
 
     if (mission.droughtStarted) {
-      const alert = CreateTorus(
-        'homeostasis-alert',
-        { diameter: 20, thickness: 0.18, tessellation: 32 },
-        this.scene,
-      );
-      alert.parent = this.missionRoot;
-      alert.position.y = 0.5;
-      alert.material = this.missionMaterial(
+      const alertMaterial = this.missionMaterial(
         'homeostasis-alert-material',
         mission.recoveryRestored
           ? Color3.FromHexString('#62d18a')
           : Color3.FromHexString('#e09b56'),
         0.85,
       );
+      if (mission.recoveryRestored) {
+        for (const [index, diameter] of [19.6, 20.3].entries()) {
+          const alert = CreateTorus(
+            `homeostasis-alert-${index}`,
+            { diameter, thickness: 0.11, tessellation: 32 },
+            this.scene,
+          );
+          alert.parent = this.missionRoot;
+          alert.position.y = 0.5;
+          alert.material = alertMaterial;
+        }
+      } else {
+        for (let index = 0; index < 12; index += 1) {
+          const angle = (Math.PI * 2 * index) / 12;
+          const alert = CreateBox(
+            `homeostasis-alert-segment-${index}`,
+            { width: 2.6, height: 0.08, depth: 0.22 },
+            this.scene,
+          );
+          alert.parent = this.missionRoot;
+          alert.position = new Vector3(Math.sin(angle) * 10, 0.5, Math.cos(angle) * 10);
+          alert.rotation.y = angle;
+          alert.material = alertMaterial;
+        }
+      }
     }
   }
 
@@ -724,10 +1011,19 @@ export class GameScene {
   setSelectedItem(item: StructureId | null): void {
     this.selectedItem = item;
     this.preview?.dispose();
+    this.previewValidMarker?.dispose();
+    this.previewBlockedMarkers.forEach((marker) => marker.dispose());
     this.previewMaterial?.dispose();
     this.preview = null;
+    this.previewValidMarker = null;
+    this.previewBlockedMarkers = [];
     this.previewMaterial = null;
-    if (!item || item === 'cytoplasm') return;
+    this.lastPlacementPreviewKey = '';
+    this.callbacks.onPlacementPreview(null);
+    if (!item || item === 'cytoplasm') {
+      if (this.currentMission) this.syncMission(this.currentMission);
+      return;
+    }
     this.preview = CreateBox(
       'placement-footprint',
       {
@@ -744,6 +1040,31 @@ export class GameScene {
       0.6,
     );
     this.preview.material = this.previewMaterial;
+    this.previewValidMarker = CreateTorus(
+      'placement-valid-marker',
+      {
+        diameter: item === 'centralVacuole' ? 4.1 : 2.25,
+        thickness: 0.14,
+        tessellation: 20,
+      },
+      this.scene,
+    );
+    this.previewValidMarker.material = this.previewMaterial;
+    for (const rotation of [Math.PI / 4, -Math.PI / 4]) {
+      const marker = CreateBox(
+        `placement-blocked-marker-${rotation}`,
+        {
+          width: item === 'centralVacuole' ? 4.2 : 2.3,
+          height: 0.15,
+          depth: 0.24,
+        },
+        this.scene,
+      );
+      marker.rotation.y = rotation;
+      marker.material = this.previewMaterial;
+      this.previewBlockedMarkers.push(marker);
+    }
+    if (this.currentMission) this.syncMission(this.currentMission);
   }
 
   clearInput(): void {

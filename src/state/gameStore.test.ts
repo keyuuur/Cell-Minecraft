@@ -42,6 +42,18 @@ describe('active-time and mission state', () => {
     expect(useGameStore.getState().mission.wallPanels).toBe(1);
   });
 
+  it('gives boundary-specific placement guidance after collection', () => {
+    useGameStore.getState().setNearbyStation('cellWall');
+    useGameStore.getState().interact();
+    expect(useGameStore.getState().mission.lastFeedback).toContain('OUTER WALL ZONE');
+    expect(useGameStore.getState().mission.lastFeedback).not.toContain('inside the cell');
+
+    useGameStore.getState().setNearbyStation('cellMembrane');
+    useGameStore.getState().interact();
+    expect(useGameStore.getState().mission.lastFeedback).toContain('INNER MEMBRANE ZONE');
+    expect(useGameStore.getState().mission.lastFeedback).toContain('just inside the wall');
+  });
+
   it('test-stage navigation reaches a stable cell with full credit', () => {
     for (let step = 0; step < 10; step += 1) useGameStore.getState().testAdvanceStage();
     expect(useGameStore.getState().mission.completed).toBe(true);
@@ -58,6 +70,31 @@ describe('active-time and mission state', () => {
     useGameStore.getState().selectItem('cellWall');
     useGameStore.getState().removeSelected();
     expect(useGameStore.getState().mission.functionEvidence.cellWall).toBeUndefined();
+  });
+
+  it('requires replacement and reinspection to restore a removed structure function', () => {
+    for (let step = 0; step < 3; step += 1) useGameStore.getState().testAdvanceStage();
+    useGameStore.setState((state) => ({
+      mission: {
+        ...state.mission,
+        collected: { ...state.mission.collected, nucleus: true },
+      },
+      nearbyStation: null,
+      nearbyStructure: 'nucleus',
+    }));
+    useGameStore.getState().interact();
+    expect(useGameStore.getState().mission.lastFeedback).toContain(
+      'The nucleus contains DNA and helps control cell activities.',
+    );
+    useGameStore.getState().selectItem('nucleus');
+    useGameStore.getState().removeSelected();
+    expect(useGameStore.getState().mission.functionEvidence.nucleus).toBeUndefined();
+    expect(useGameStore.getState().selectedItem).toBe('nucleus');
+    useGameStore.getState().placeSelected({ x: -3, y: 1, z: 0 });
+    expect(useGameStore.getState().mission.functionEvidence.nucleus).toBeUndefined();
+    useGameStore.getState().setNearbyStructure('nucleus');
+    useGameStore.getState().interact();
+    expect(useGameStore.getState().mission.functionEvidence.nucleus).toBe(true);
   });
 
   it('does not award function evidence when Overview opens', () => {

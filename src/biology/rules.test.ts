@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { calculateScore } from './scoring';
 import {
+  activeStationIds,
+  assessPlacement,
   canPlaceStructure,
   createInitialMission,
   currentStage,
@@ -64,6 +66,38 @@ describe('Unit 1 mission rules', () => {
     mission.cytoplasmEstablished = true;
     expect(canPlaceStructure(mission, 'mitochondria', { x: 2, y: 1, z: 2 })).toMatchObject({
       allowed: false,
+    });
+  });
+
+  it('offers both valid choices within each paired structure stage', () => {
+    const mission = createInitialMission();
+    mission.wallPanels = PANEL_TARGET;
+    mission.membranePanels = PANEL_TARGET;
+    mission.cytoplasmEstablished = true;
+    expect(activeStationIds(mission)).toEqual(['nucleus', 'ribosomes']);
+    mission.placements.nucleus = {
+      id: 'nucleus',
+      position: { x: -3, y: 1, z: 0 },
+      placedAt: Date.now(),
+    };
+    expect(activeStationIds(mission)).toEqual(['ribosomes']);
+    mission.placements.ribosomes = {
+      id: 'ribosomes',
+      position: { x: 3, y: 1, z: 0 },
+      placedAt: Date.now(),
+    };
+    expect(activeStationIds(mission)).toEqual(['mitochondria', 'chloroplasts']);
+  });
+
+  it('reports named placement zones with valid and blocked feedback', () => {
+    const mission = createInitialMission();
+    expect(assessPlacement(mission, 'cellWall', { x: 0, y: 1, z: 0 })).toMatchObject({
+      allowed: false,
+      zoneLabel: 'OUTER WALL ZONE',
+    });
+    expect(assessPlacement(mission, 'cellWall', { x: 0, y: 1, z: 10 })).toEqual({
+      allowed: true,
+      zoneLabel: 'OUTER WALL ZONE',
     });
   });
 

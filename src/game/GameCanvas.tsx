@@ -22,6 +22,7 @@ export function GameCanvas({
   const paused = useGameStore((state) => state.paused);
   const setNearbyStation = useGameStore((state) => state.setNearbyStation);
   const setNearbyStructure = useGameStore((state) => state.setNearbyStructure);
+  const setPlacementPreview = useGameStore((state) => state.setPlacementPreview);
   const selectedItem = useGameStore((state) => state.selectedItem);
   const [joystickActive, setJoystickActive] = useState(false);
   const joystickOrigin = useRef({ x: 0, y: 0 });
@@ -34,6 +35,7 @@ export function GameCanvas({
       {
         onNearbyStation: setNearbyStation,
         onNearbyStructure: setNearbyStructure,
+        onPlacementPreview: setPlacementPreview,
         onFps: onFpsChange,
         onContextLost,
       },

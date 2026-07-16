@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
-import { objectiveFor, statusValues } from '../biology/rules';
+import { activeStationIds, isStructurePresent, objectiveFor, statusValues } from '../biology/rules';
 import { STRUCTURE_LABELS } from '../data/assignment';
 import type { GameScene } from '../game/GameScene';
 import { useGameStore } from '../state/gameStore';
@@ -24,6 +24,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
   const selectedItem = useGameStore((state) => state.selectedItem);
   const nearbyStation = useGameStore((state) => state.nearbyStation);
   const nearbyStructure = useGameStore((state) => state.nearbyStructure);
+  const placementPreview = useGameStore((state) => state.placementPreview);
   const score = useGameStore((state) => state.score);
   const paused = useGameStore((state) => state.paused);
   const setPaused = useGameStore((state) => state.setPaused);
@@ -42,6 +43,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
   const [hintLevel, setHintLevel] = useState(0);
   const modalTriggerRef = useRef<HTMLElement | null>(null);
   const status = statusValues(mission);
+  const activeStations = activeStationIds(mission);
   const secondsLeft = Math.max(0, 15 * 60 - Math.floor(activeElapsedMs / 1000));
   const timer = `${String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:${String(secondsLeft % 60).padStart(2, '0')}`;
   const collectedItems = Object.keys(mission.collected).filter(
@@ -57,13 +59,29 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
         ? mission.cytoplasmEstablished
         : Boolean(mission.collected[nearbyStation])
     : false;
-  const placeIsPrimary = Boolean(selectedItem);
+  const placeIsPrimary = Boolean(selectedItem && placementPreview?.status === 'valid');
   const interactIsPrimary =
     !placeIsPrimary &&
     Boolean(
       (nearbyStation && !nearbyStationComplete) || (nearbyStructure && !nearbyFunctionObserved),
     );
   const modalOpen = showOverview || showScore || showHints || paused;
+  const turgorLabel = !mission.placements.centralVacuole
+    ? 'Not set'
+    : mission.droughtStarted && !mission.recoveryRestored
+      ? '25% LOW'
+      : mission.recoveryRestored
+        ? '100% RESTORED'
+        : '100% HIGH';
+  const nextStationLabel = activeStations
+    .map((id) => (id === 'waterStation' ? 'Water station' : STRUCTURE_LABELS[id]))
+    .join(' or ');
+  const showNextStationCue = Boolean(
+    nextStationLabel &&
+    !selectedItem &&
+    !(nearbyStation && !nearbyStationComplete) &&
+    !(nearbyStructure && !nearbyFunctionObserved),
+  );
 
   useEffect(() => {
     sceneRef.current?.setPaused(modalOpen);
@@ -122,21 +140,21 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
             <strong>Functions</strong>
             <small>{status.function}%</small>
           </div>
-          <div>
-            <span aria-hidden="true">💧</span>
+          <div
+            className={`turgor-status ${mission.droughtStarted && !mission.recoveryRestored ? 'is-low' : mission.recoveryRestored ? 'is-restored' : ''}`}
+          >
+            <span aria-hidden="true">T</span>
             <strong>Turgor</strong>
-            <small>{status.turgor}%</small>
+            <small>{turgorLabel}</small>
           </div>
         </aside>
 
         <div className="feedback-toast" role="status">
           {mission.lastFeedback}
         </div>
-        {nearbyStation && (
+        {nearbyStation && !selectedItem && (!nearbyStationComplete || !nextStationLabel) && (
           <div className="nearby-label">
-            {selectedItem && nearbyStation !== 'waterStation' ? (
-              <>Selected: {STRUCTURE_LABELS[selectedItem]} — move to its zone and tap Place</>
-            ) : nearbyStationComplete ? (
+            {nearbyStationComplete ? (
               <>
                 {nearbyStation === 'waterStation'
                   ? 'Checked: Water station'
@@ -155,10 +173,29 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
             )}
           </div>
         )}
-        {!nearbyStation && nearbyStructure && (
-          <div className="nearby-label">
-            {nearbyFunctionObserved ? 'Observed' : 'Inspect'}: {STRUCTURE_LABELS[nearbyStructure]}
-            {!nearbyFunctionObserved && ' — tap Interact'}
+        {!nearbyStation &&
+          nearbyStructure &&
+          !selectedItem &&
+          (!nearbyFunctionObserved || !nextStationLabel) && (
+            <div className="nearby-label">
+              {nearbyFunctionObserved ? 'Observed' : 'Inspect'}: {STRUCTURE_LABELS[nearbyStructure]}
+              {!nearbyFunctionObserved && ' — tap Interact'}
+            </div>
+          )}
+        {selectedItem && placementPreview && (
+          <div className={`placement-guide is-${placementPreview.status}`} role="status">
+            <strong>{placementPreview.status === 'valid' ? '✓ VALID ZONE' : '✕ BLOCKED'}</strong>
+            <span>
+              {placementPreview.status === 'valid'
+                ? `${placementPreview.zoneLabel} — tap Place.`
+                : placementPreview.reason}
+            </span>
+          </div>
+        )}
+        {showNextStationCue && (
+          <div className="next-station-cue">
+            <strong>{activeStations.length > 1 ? 'NEXT CHOICE' : 'NEXT DEPOT'}</strong>
+            <span>{nextStationLabel}</span>
           </div>
         )}
 
@@ -166,17 +203,35 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
           {collectedItems.length === 0 ? (
             <span className="empty-hotbar">No module collected</span>
           ) : (
-            collectedItems.map((id) => (
-              <button
-                type="button"
-                key={id}
-                className={selectedItem === id ? 'is-selected' : ''}
-                aria-pressed={selectedItem === id}
-                onClick={() => selectItem(id as keyof typeof STRUCTURE_LABELS)}
-              >
-                {STRUCTURE_LABELS[id as keyof typeof STRUCTURE_LABELS]}
-              </button>
-            ))
+            collectedItems.map((id) => {
+              const structureId = id as keyof typeof STRUCTURE_LABELS;
+              const installed = isStructurePresent(mission, structureId);
+              const needsRepair =
+                !installed &&
+                mission.lastFeedback.toLowerCase().includes('removed') &&
+                selectedItem === structureId;
+              const itemState =
+                selectedItem === structureId
+                  ? needsRepair
+                    ? 'NEEDS REPAIR'
+                    : 'SELECTED'
+                  : installed
+                    ? 'INSTALLED'
+                    : 'READY TO PLACE';
+              return (
+                <button
+                  type="button"
+                  key={id}
+                  aria-label={STRUCTURE_LABELS[structureId]}
+                  className={`${selectedItem === id ? 'is-selected' : ''} ${installed ? 'is-installed' : ''} ${needsRepair ? 'needs-repair' : ''}`}
+                  aria-pressed={selectedItem === id}
+                  onClick={() => selectItem(structureId)}
+                >
+                  <span>{STRUCTURE_LABELS[structureId]}</span>
+                  <small>{itemState}</small>
+                </button>
+              );
+            })
           )}
         </nav>
 
@@ -191,6 +246,8 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
           <button
             className={`hud-button ${placeIsPrimary ? 'action-primary' : ''}`}
             type="button"
+            aria-label="Place"
+            disabled={Boolean(selectedItem && placementPreview?.status !== 'valid')}
             onClick={() =>
               placeSelected(
                 sceneRef.current?.getPlacementPosition() ?? {
@@ -201,10 +258,15 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
               )
             }
           >
-            Place
+            {selectedItem ? `Place ${STRUCTURE_LABELS[selectedItem]}` : 'Place'}
           </button>
-          <button className="hud-button" type="button" onClick={removeSelected}>
-            Remove selected
+          <button
+            className="hud-button"
+            type="button"
+            aria-label="Remove selected"
+            onClick={removeSelected}
+          >
+            {selectedItem ? `Remove ${STRUCTURE_LABELS[selectedItem]}` : 'Remove selected'}
           </button>
         </div>
 

@@ -17,6 +17,11 @@ interface ScreenshotEvidence {
   sha256: string;
 }
 
+interface DiagnosticEvidence {
+  filename: string;
+  sha256: string;
+}
+
 interface SubmissionProbe {
   attemptId: string;
   isTest: boolean;
@@ -45,6 +50,7 @@ const appBaseSha =
 const evidenceSha = process.env.VISUAL_EVIDENCE_SHA ?? 'working-tree';
 const runNumber = Number(runId);
 const isCountedRun = Number.isInteger(runNumber) && runNumber > 0;
+const forceReloadRecovery = process.env.VISUAL_FORCE_RELOAD === 'true';
 const defaultYaw = 2.16;
 const recenterPosition: Point2 = { x: -18, z: 10 };
 
@@ -72,6 +78,17 @@ const structureLabels = {
   mitochondria: 'Mitochondria',
   chloroplasts: 'Chloroplasts',
   centralVacuole: 'Large central vacuole',
+} as const;
+
+const functionEvidenceText = {
+  cellWall: 'supports the plant cell',
+  cellMembrane: 'controls what enters and leaves',
+  cytoplasm: 'gelatin-like material',
+  nucleus: 'contains DNA and helps control cell activities',
+  ribosomes: 'make proteins',
+  mitochondria: 'break down glucose to release usable energy',
+  chloroplasts: 'Photosynthesis occurs in chloroplasts',
+  centralVacuole: 'stores water and helps maintain turgor pressure',
 } as const;
 
 const stations: Record<string, Point2> = {
@@ -388,6 +405,21 @@ async function capture(
   });
 }
 
+async function captureDiagnostic(
+  page: Page,
+  diagnostics: DiagnosticEvidence[],
+  slug: string,
+): Promise<void> {
+  await page.waitForTimeout(420);
+  const filename = `diagnostic-${slug}.png`;
+  const destination = path.join(outputDir, filename);
+  const buffer = await page.screenshot({ path: destination });
+  diagnostics.push({
+    filename,
+    sha256: createHash('sha256').update(buffer).digest('hex'),
+  });
+}
+
 async function assertGraphicsHealthy(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Graphics paused safely' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'The 3D scene paused safely' })).toHaveCount(0);
@@ -403,6 +435,27 @@ async function readVisibleGrade(page: Page): Promise<number> {
   const match = text.match(/(\d+)%/);
   if (!match) throw new Error(`Could not read visible numerical grade from: ${text}`);
   return Number(match[1]);
+}
+
+async function readActiveSecondsRemaining(page: Page): Promise<number> {
+  const text = (await page.locator('.timer-card strong').textContent()) ?? '';
+  const match = text.match(/(\d+):(\d+)/);
+  if (!match) throw new Error(`Could not read the visible active timer from: ${text}`);
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+async function applyAccessibilityProfile(page: Page): Promise<void> {
+  const settings = [
+    ['VISUAL_LARGE_TEXT', 'Large text'],
+    ['VISUAL_HIGH_CONTRAST', 'High contrast'],
+    ['VISUAL_REDUCED_MOTION', 'Reduced motion'],
+    ['VISUAL_MUTE', 'Mute sounds'],
+  ] as const;
+  for (const [environmentName, label] of settings) {
+    if (process.env[environmentName] !== 'true') continue;
+    const checkbox = page.getByRole('checkbox', { name: label });
+    if (!(await checkbox.isChecked())) await activateVisibleControl(page, checkbox, label, true);
+  }
 }
 
 async function activateVisibleControl(
@@ -461,15 +514,17 @@ async function collectFromDepot(page: Page, id: keyof typeof structureLabels): P
     id === 'cytoplasm' ? 'Cytoplasm now fills' : 'Collected',
   );
   if (id === 'cytoplasm') {
-    await expect(page.getByText('Established: Cytoplasm')).toBeVisible();
+    await expect(page.locator('.next-station-cue')).toContainText('Nucleus or Ribosomes');
     await expect(page.getByRole('button', { name: 'Place' })).not.toHaveClass(/action-primary/);
     await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
     await expect(page.locator('.action-cluster .action-primary')).toHaveCount(0);
   } else {
-    await expect(page.getByText(`Selected: ${label}`)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Place' })).toHaveClass(/action-primary/);
+    await expect(page.getByRole('button', { name: label, exact: true })).toHaveClass(/is-selected/);
+    await expect(page.locator('.placement-guide.is-blocked')).toContainText('BLOCKED');
+    await expect(page.getByRole('button', { name: 'Place' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Place' })).not.toHaveClass(/action-primary/);
     await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
-    await expect(page.locator('.action-cluster .action-primary')).toHaveCount(1);
+    await expect(page.locator('.action-cluster .action-primary')).toHaveCount(0);
   }
 }
 
@@ -479,11 +534,18 @@ async function inspectStructure(
   expectedFunctionPercent: RegExp,
 ): Promise<void> {
   const label = structureLabels[id];
-  await expect(page.getByText(`Inspect: ${label}`)).toBeVisible();
+  const inspectLabel = page.getByText(`Inspect: ${label}`);
+  if (!(await inspectLabel.isVisible().catch(() => false))) {
+    await navigateFromRecenter(page, placements[id], new RegExp(`Inspect:\\s*${label}`, 'i'));
+  }
+  await expect(inspectLabel).toBeVisible();
   await clickVisibleButton(page, 'Interact');
-  await expect(page.locator('.feedback-toast')).toContainText('function observed');
+  await expect(page.locator('.feedback-toast')).toContainText('observed');
+  await expect(page.locator('.feedback-toast')).toContainText(functionEvidenceText[id]);
   await expect(page.getByLabel('Cell status')).toContainText(expectedFunctionPercent);
-  await expect(page.getByText(`Observed: ${label}`)).toBeVisible();
+  await expect(
+    page.getByText(`Observed: ${label}`).or(page.locator('.next-station-cue')),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
   await expect(page.locator('.action-cluster .action-primary')).toHaveCount(0);
 }
@@ -496,55 +558,78 @@ async function selectVisibleHotbarItem(page: Page, label: string): Promise<void>
   await expect(button).toHaveClass(/is-selected/);
 }
 
-async function placeCentralVacuole(page: Page): Promise<void> {
-  const feedback = page.locator('.feedback-toast');
-  await clickRecenter(page);
-  await page.waitForTimeout(120);
-  // Recenter's locked heading already crosses the broad central zone. Keeping that heading avoids
-  // small drag-look variance while the visible Place feedback determines when to stop.
-  for (let attempt = 0; attempt < 22; attempt += 1) {
-    await clickVisibleButton(page, 'Place');
-    await page.waitForTimeout(300);
-    const message = (await feedback.textContent()) ?? '';
-    if (/installed|Water storage is established/i.test(message)) return;
-    if (!/broad central zone/i.test(message)) {
-      throw new Error(`Unexpected vacuole placement feedback: ${message}`);
+async function moveUntilPlacementValid(page: Page, attempts: number): Promise<void> {
+  const place = page.getByRole('button', { name: 'Place', exact: true });
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (await place.isEnabled()) {
+      await expect(page.locator('.placement-guide.is-valid')).toContainText('VALID ZONE');
+      return;
     }
-    // Move toward the center in short visible-control steps. The game's placement feedback is
-    // the sole signal for when the broad zone has been reached.
-    await holdForward(page, 60);
-    await page.waitForTimeout(180);
+    await holdForward(page, 140);
+    await page.waitForTimeout(220);
   }
-  throw new Error('Visible placement retries did not reach the vacuole central zone.');
+  throw new Error('Visible movement did not reach a valid placement zone.');
 }
 
-async function placeBoundaryPanels(page: Page, id: 'cellWall' | 'cellMembrane'): Promise<void> {
-  const feedback = page.locator('.feedback-toast');
+async function moveToPlacementZone(
+  page: Page,
+  target: Point2,
+  settleMs = 0,
+  attempts = 50,
+): Promise<void> {
+  await clickRecenter(page);
+  await page.waitForTimeout(120);
+  await rotateFromRecenter(page, target);
+  await moveUntilPlacementValid(page, attempts);
+  if (settleMs > 0) {
+    await holdForward(page, settleMs);
+    await page.waitForTimeout(220);
+    await expect(page.getByRole('button', { name: 'Place', exact: true })).toBeEnabled();
+    await expect(page.locator('.placement-guide.is-valid')).toContainText('VALID ZONE');
+  }
+}
+
+async function framePlacedStructures(
+  page: Page,
+  ids: Array<keyof typeof placements>,
+): Promise<void> {
+  const target = ids.reduce(
+    (sum, id) => ({
+      x: sum.x + placements[id].x / ids.length,
+      z: sum.z + placements[id].z / ids.length,
+    }),
+    { x: 0, z: 0 },
+  );
+  await clickRecenter(page);
+  await page.waitForTimeout(120);
+  await rotateFromRecenter(page, target);
+  await holdForward(page, 1_900);
+  await page.waitForTimeout(360);
+}
+
+async function placeCentralVacuole(page: Page): Promise<void> {
+  await clickRecenter(page);
+  await page.waitForTimeout(120);
+  await rotateFromRecenter(page, placements.centralVacuole);
+  await moveUntilPlacementValid(page, 60);
+  await clickVisibleButton(page, 'Place');
+  await expect(page.locator('.feedback-toast')).toContainText('Water storage is established');
+}
+
+async function placeBoundaryPanels(
+  page: Page,
+  id: 'cellWall' | 'cellMembrane',
+  onValid?: () => Promise<void>,
+): Promise<void> {
   const successPattern = id === 'cellWall' ? /Wall panel snapped/i : /Membrane panel snapped/i;
-  const correctionPattern =
-    id === 'cellWall' ? /Move to the chamber boundary/i : /Move to the inside boundary/i;
   await clickRecenter(page);
   await page.waitForTimeout(120);
   await rotateFromRecenter(page, placements[id]);
-
-  let placed = 0;
-  for (let attempt = 0; attempt < 16 && placed === 0; attempt += 1) {
-    await clickVisibleButton(page, 'Place');
-    await page.waitForTimeout(260);
-    const message = (await feedback.textContent()) ?? '';
-    if (successPattern.test(message)) {
-      placed = 1;
-      break;
-    }
-    if (!correctionPattern.test(message)) {
-      throw new Error(`Unexpected boundary placement feedback: ${message}`);
-    }
-    // A long visible joystick hold remains reliable when software WebKit renders slowly;
-    // at normal frame rates it moves from recenter directly into the broad boundary band.
-    await holdForward(page, 1_500);
-  }
-  if (placed === 0) throw new Error(`Visible placement retries did not reach the ${id} zone.`);
-
+  await moveUntilPlacementValid(page, 30);
+  await onValid?.();
+  await clickVisibleButton(page, 'Place');
+  await expect(page.locator('.feedback-toast')).toContainText(successPattern);
+  let placed = 1;
   while (placed < 6) {
     await clickVisibleButton(page, 'Place');
     placed += 1;
@@ -565,6 +650,7 @@ test.describe('real-control visual rollout evidence', () => {
 
     const startedAt = new Date();
     const screenshots: ScreenshotEvidence[] = [];
+    const diagnosticScreenshots: DiagnosticEvidence[] = [];
     const pageErrors: string[] = [];
     const consoleErrors: string[] = [];
     let submissionCallCount = 0;
@@ -626,6 +712,7 @@ test.describe('real-control visual rollout evidence', () => {
     await page.getByLabel('Class period').selectOption('1');
     await tapVisibleButton(page, 'Continue to controls');
     await completeControlPractice(page);
+    await applyAccessibilityProfile(page);
     await page.getByRole('button', { name: 'Start mission and timer' }).scrollIntoViewIfNeeded();
     await capture(page, screenshots, 2, 'controls-practice-complete', true);
     const missionStartClickedAt = Date.now();
@@ -657,7 +744,12 @@ test.describe('real-control visual rollout evidence', () => {
     await capture(page, screenshots, 3, 'mission-opening');
 
     await collectFromDepot(page, 'cellWall');
-    await placeBoundaryPanels(page, 'cellWall');
+    await captureDiagnostic(page, diagnosticScreenshots, 'placement-blocked');
+    semanticAssertions.push('blocked placement was shown before movement into the outer wall zone');
+    await placeBoundaryPanels(page, 'cellWall', async () => {
+      await captureDiagnostic(page, diagnosticScreenshots, 'placement-valid');
+    });
+    semanticAssertions.push('visible movement corrected the blocked placement and enabled Place');
     await expect(page.locator('.feedback-toast')).toContainText('Wall complete');
     await page.waitForTimeout(360);
     await nudgeForwardUntil(page, /Inspect:\s*Cell wall panels/i, 10);
@@ -675,12 +767,48 @@ test.describe('real-control visual rollout evidence', () => {
     await inspectStructure(page, 'cytoplasm', /38%/);
     await capture(page, screenshots, 4, 'boundary-and-cytoplasm');
 
+    if (runNumber === 3 || forceReloadRecovery) {
+      const objectiveBeforeReload =
+        (await page.locator('.objective-card strong').textContent())?.trim() ?? '';
+      const gradeBeforeReload = await readVisibleGrade(page);
+      await clickVisibleButton(page, 'Pause');
+      await expect(page.getByRole('dialog', { name: 'Mission paused' })).toBeVisible();
+      await page.waitForTimeout(450);
+      const timerBeforeReload = await readActiveSecondsRemaining(page);
+      await page.reload();
+      await expect(page.getByRole('button', { name: 'Resume saved attempt' })).toBeVisible();
+      await page.waitForTimeout(3_500);
+      await clickVisibleButton(page, 'Resume saved attempt');
+      await expect(page.getByLabel('Mission controls')).toBeVisible();
+      await expect(page.locator('.objective-card strong')).toHaveText(objectiveBeforeReload);
+      await expect(page.getByLabel('Cell status')).toContainText('38%');
+      expect(await readVisibleGrade(page), 'grade returns after reload').toBe(gradeBeforeReload);
+      await expect(page.locator('.virtual-joystick[aria-label="Movement joystick"]')).toHaveCount(
+        controlProfile === 'keyboard-touch' ? 0 : 1,
+      );
+      const timerAfterReload = await readActiveSecondsRemaining(page);
+      expect(timerAfterReload).toBeLessThanOrEqual(timerBeforeReload);
+      expect(timerAfterReload).toBeGreaterThanOrEqual(timerBeforeReload - 1);
+      await assertGraphicsHealthy(page);
+      graphicsContextChecks += 1;
+      if (controlProfile === 'keyboard-touch') {
+        await navigateFromRecenter(page, stations.nucleus, /Nearby:\s*Nucleus/i);
+        await clickRecenter(page);
+      }
+      semanticAssertions.push(
+        'reload recovery preserved objective, grade, function state, control profile, and inactive time',
+      );
+      if (controlProfile === 'keyboard-touch') {
+        semanticAssertions.push('fresh keyboard movement reached an active depot after reload');
+      }
+    }
+
     for (const [id, functionPercent] of [
       ['nucleus', /50%/],
       ['ribosomes', /63%/],
     ] as const) {
       await collectFromDepot(page, id);
-      await navigateFromRecenter(page, placements[id], /Observed:\s*Cytoplasm/i);
+      await moveToPlacementZone(page, placements[id], id === 'nucleus' ? 500 : 650);
       await clickVisibleButton(page, 'Place');
       await expect(page.locator('.feedback-toast')).toContainText('installed');
       await page.waitForTimeout(360);
@@ -690,7 +818,7 @@ test.describe('real-control visual rollout evidence', () => {
         await selectVisibleHotbarItem(page, 'Nucleus');
         await clickVisibleButton(page, 'Remove selected');
         await expect(page.locator('.feedback-toast')).toContainText(
-          'Replace it to restore full credit',
+          'replace it, then reinspect to restore full credit',
         );
         await expect(page.getByLabel('Cell status')).toContainText('38%');
         const gradeAfterRemoval = await readVisibleGrade(page);
@@ -709,6 +837,7 @@ test.describe('real-control visual rollout evidence', () => {
         semanticAssertions.push('visible Remove, replace, and reinspect restored full credit');
       }
     }
+    await framePlacedStructures(page, ['nucleus', 'ribosomes']);
     await capture(page, screenshots, 5, 'nucleus-and-ribosomes');
 
     for (const [id, functionPercent] of [
@@ -716,16 +845,18 @@ test.describe('real-control visual rollout evidence', () => {
       ['chloroplasts', /88%/],
     ] as const) {
       await collectFromDepot(page, id);
-      await navigateFromRecenter(page, placements[id], /Observed:\s*Cytoplasm/i);
+      await moveToPlacementZone(page, placements[id], id === 'mitochondria' ? 750 : 850);
       await clickVisibleButton(page, 'Place');
       await expect(page.locator('.feedback-toast')).toContainText('installed');
       await page.waitForTimeout(360);
       await inspectStructure(page, id, functionPercent);
     }
+    await framePlacedStructures(page, ['mitochondria', 'chloroplasts']);
     await capture(page, screenshots, 6, 'mitochondria-and-chloroplasts');
 
     await collectFromDepot(page, 'centralVacuole');
     await placeCentralVacuole(page);
+    await holdMovement(page, 0, -1, 450);
     await page.waitForTimeout(360);
     await expect(page.getByText('Inspect: Large central vacuole')).toBeVisible();
     await capture(page, screenshots, 7, 'function-inspect-before');
@@ -751,7 +882,7 @@ test.describe('real-control visual rollout evidence', () => {
 
     await navigateFromRecenter(page, stations.waterStation, /Nearby:\s*Water station/i);
     await clickVisibleButton(page, 'Interact');
-    await expect(page.locator('.feedback-toast')).toContainText('Water availability is restored');
+    await expect(page.locator('.feedback-toast')).toContainText('External water is restored');
     await clickVisibleButton(page, 'Overview');
     await expect(page.getByText('100% pressure')).toBeVisible();
     await expect(page.locator('.system-success')).toContainText('plant is firm again');
@@ -794,6 +925,7 @@ test.describe('real-control visual rollout evidence', () => {
     expect(pageErrors, 'page errors').toEqual([]);
     expect(unallowedConsoleErrors, 'unallowlisted console errors').toEqual([]);
     expect(screenshots).toHaveLength(12);
+    expect(diagnosticScreenshots).toHaveLength(2);
     expect(submissionCallCount, 'submission request count').toBe(1);
     expect(submissionProbe?.attemptId, 'nonempty transient attempt ID').toBeTruthy();
     expect(submissionProbe?.completed, 'completed submission').toBe(true);
@@ -828,6 +960,7 @@ test.describe('real-control visual rollout evidence', () => {
       finishedAtUtc: finishedAt.toISOString(),
       semanticAssertions,
       screenshots,
+      diagnosticScreenshots,
       pageErrors,
       consoleErrors: unallowedConsoleErrors,
       allowedConsoleErrors,

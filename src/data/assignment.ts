@@ -77,12 +77,19 @@ export const STRUCTURE_FUNCTIONS: Record<StructureId, string> = {
 };
 
 export const STRUCTURE_VISIBLE_EFFECTS: Record<StructureId, string> = {
-  cellWall: 'The outer support frame brightens and the observed-functions status increases.',
-  cellMembrane: 'The inner protective layer brightens and the observed-functions status increases.',
-  cytoplasm: "The interior fill brightens to show the cell's gelatin-like internal medium.",
-  nucleus: 'A purple control signal appears around the DNA-containing nucleus.',
-  ribosomes: 'A white protein-building signal appears around the ribosome cluster.',
-  mitochondria: 'An orange energy-release signal appears around the mitochondria.',
-  chloroplasts: 'A green photosynthesis signal appears around the chloroplasts.',
-  centralVacuole: 'The full water store raises turgor and keeps the plant indicator firm.',
+  cellWall:
+    'Game cue: the thick outer support frame brightens after its support function is observed.',
+  cellMembrane:
+    'Game cue: the thin inner double band brightens after its protection and movement-control function is observed.',
+  cytoplasm:
+    "Game cue: the interior fill brightens after the cell's gelatin-like internal medium is observed.",
+  nucleus:
+    'Game cue: rings highlight the DNA-containing nucleus after its role in helping control cell activities is observed.',
+  ribosomes: 'Game cue: the bead cluster brightens after its protein-making function is observed.',
+  mitochondria:
+    'Game cue: bands highlight the mitochondria after their glucose-breakdown and cellular-energy function is observed.',
+  chloroplasts:
+    'Game cue: bands highlight the chloroplasts after their photosynthesis function is observed.',
+  centralVacuole:
+    'Game cue: water-level rings and the firm plant indicator show water storage and high turgor.',
 };

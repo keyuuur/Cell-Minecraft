@@ -1,7 +1,20 @@
 import { REQUIRED_STRUCTURES } from '../data/assignment';
-import type { MissionStage, MissionState, PlaceableStructureId, Point3 } from '../types/game';
+import type {
+  MissionStage,
+  MissionState,
+  PlaceableStructureId,
+  Point3,
+  StructureId,
+} from '../types/game';
 
 export const PANEL_TARGET = 6;
+export type ActiveStationId = StructureId | 'waterStation';
+
+export interface PlacementAssessment {
+  allowed: boolean;
+  reason?: string;
+  zoneLabel: string;
+}
 
 export function createInitialMission(practice = false): MissionState {
   return {
@@ -40,6 +53,21 @@ export function currentStage(mission: MissionState): MissionStage {
   return 'water-storage';
 }
 
+export function activeStationIds(mission: MissionState): ActiveStationId[] {
+  if (mission.wallPanels < PANEL_TARGET) return ['cellWall'];
+  if (mission.membranePanels < PANEL_TARGET) return ['cellMembrane'];
+  if (!mission.cytoplasmEstablished) return ['cytoplasm'];
+  if (!mission.placements.nucleus || !mission.placements.ribosomes) {
+    return (['nucleus', 'ribosomes'] as const).filter((id) => !mission.placements[id]);
+  }
+  if (!mission.placements.mitochondria || !mission.placements.chloroplasts) {
+    return (['mitochondria', 'chloroplasts'] as const).filter((id) => !mission.placements[id]);
+  }
+  if (!mission.placements.centralVacuole) return ['centralVacuole'];
+  if (mission.droughtObserved && !mission.recoveryRestored) return ['waterStation'];
+  return [];
+}
+
 export function objectiveFor(mission: MissionState): string {
   const stage = currentStage(mission);
   switch (stage) {
@@ -67,7 +95,7 @@ export function objectiveFor(mission: MissionState): string {
         : 'Open Overview to observe the full vacuole and high turgor.';
     case 'drought-diagnosis':
       return mission.droughtObserved
-        ? 'Use the water station to diagnose and repair the water shortage.'
+        ? 'Restore external water availability at the water station.'
         : 'The cell is wilting. Use Overview to observe the system change.';
     case 'recovery':
       return 'Open Overview to verify that turgor and firmness recovered.';
@@ -80,16 +108,57 @@ export function canEstablishCytoplasm(mission: MissionState): boolean {
   return mission.wallPanels === PANEL_TARGET && mission.membranePanels === PANEL_TARGET;
 }
 
-export function canPlaceStructure(
+export function assessPlacement(
   mission: MissionState,
-  id: PlaceableStructureId,
+  id: StructureId,
   position: Point3,
-): { allowed: boolean; reason?: string } {
+): PlacementAssessment {
+  const radius = Math.hypot(position.x, position.z);
+  if (id === 'cellWall') {
+    return radius >= 8.5 && radius <= 12.5
+      ? { allowed: true, zoneLabel: 'OUTER WALL ZONE' }
+      : {
+          allowed: false,
+          reason: 'Move to the chamber boundary before snapping a wall panel into place.',
+          zoneLabel: 'OUTER WALL ZONE',
+        };
+  }
+  if (id === 'cellMembrane') {
+    if (mission.wallPanels < PANEL_TARGET) {
+      return {
+        allowed: false,
+        reason: 'The supporting wall must be built outside first.',
+        zoneLabel: 'INNER MEMBRANE ZONE',
+      };
+    }
+    return radius >= 7.5 && radius <= 11.5
+      ? { allowed: true, zoneLabel: 'INNER MEMBRANE ZONE' }
+      : {
+          allowed: false,
+          reason: 'Move to the inside boundary before snapping a membrane panel into place.',
+          zoneLabel: 'INNER MEMBRANE ZONE',
+        };
+  }
+  if (id === 'cytoplasm') {
+    return {
+      allowed: false,
+      reason: 'Establish cytoplasm from its supply depot.',
+      zoneLabel: 'INTERIOR FILL',
+    };
+  }
   if (!mission.cytoplasmEstablished) {
-    return { allowed: false, reason: 'Establish the cytoplasm before adding internal structures.' };
+    return {
+      allowed: false,
+      reason: 'Establish the cytoplasm before adding internal structures.',
+      zoneLabel: id === 'centralVacuole' ? 'CENTRAL VACUOLE ZONE' : 'BROAD INTERIOR ZONE',
+    };
   }
   if (mission.placements[id]) {
-    return { allowed: false, reason: 'That structure is already installed.' };
+    return {
+      allowed: false,
+      reason: 'That structure is already installed.',
+      zoneLabel: id === 'centralVacuole' ? 'CENTRAL VACUOLE ZONE' : 'BROAD INTERIOR ZONE',
+    };
   }
   if (
     (id === 'mitochondria' || id === 'chloroplasts') &&
@@ -98,24 +167,50 @@ export function canPlaceStructure(
     return {
       allowed: false,
       reason: 'Install the nucleus and ribosomes before this system stage.',
+      zoneLabel: 'BROAD INTERIOR ZONE',
     };
   }
   if (id === 'centralVacuole') {
     if (!mission.placements.nucleus || !mission.placements.ribosomes) {
-      return { allowed: false, reason: 'Install the nucleus and ribosomes first.' };
+      return {
+        allowed: false,
+        reason: 'Install the nucleus and ribosomes first.',
+        zoneLabel: 'CENTRAL VACUOLE ZONE',
+      };
     }
     if (!mission.placements.mitochondria || !mission.placements.chloroplasts) {
-      return { allowed: false, reason: 'Install mitochondria and chloroplasts first.' };
+      return {
+        allowed: false,
+        reason: 'Install mitochondria and chloroplasts first.',
+        zoneLabel: 'CENTRAL VACUOLE ZONE',
+      };
     }
     const central = Math.abs(position.x) <= 4 && Math.abs(position.z) <= 4;
     return central
-      ? { allowed: true }
-      : { allowed: false, reason: 'The large central vacuole needs the broad central zone.' };
+      ? { allowed: true, zoneLabel: 'CENTRAL VACUOLE ZONE' }
+      : {
+          allowed: false,
+          reason: 'The large central vacuole needs the broad central zone.',
+          zoneLabel: 'CENTRAL VACUOLE ZONE',
+        };
   }
   const broadInterior = Math.abs(position.x) <= 8 && Math.abs(position.z) <= 8;
   return broadInterior
-    ? { allowed: true }
-    : { allowed: false, reason: 'Choose a broad zone inside the membrane.' };
+    ? { allowed: true, zoneLabel: 'BROAD INTERIOR ZONE' }
+    : {
+        allowed: false,
+        reason: 'Choose a broad zone inside the membrane.',
+        zoneLabel: 'BROAD INTERIOR ZONE',
+      };
+}
+
+export function canPlaceStructure(
+  mission: MissionState,
+  id: PlaceableStructureId,
+  position: Point3,
+): { allowed: boolean; reason?: string } {
+  const { allowed, reason } = assessPlacement(mission, id, position);
+  return { allowed, reason };
 }
 
 export function isStructurePresent(mission: MissionState, id: string): boolean {
