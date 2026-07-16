@@ -98,7 +98,7 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ### Counted UI rollout Run 1 — verified 2026-07-16
 
-- Status: **passed and counted as 1 of 5**. Visual passes remain 0 of 3. Rollout emails remain 0 of 6 until the verified report is sent after this checkpoint is pushed.
+- Status: **passed and counted as 1 of 5**. Visual passes remain 0 of 3. Email 1 was sent successfully with the verified PDF; rollout emails are 1 of 6.
 - Application baseline: `43ebed6fe7658ea476c5a58b143a8c288ce0db73`. Evidence harness: `5d37e28bd22921348cd6ba770d52cea65a856be0`.
 - Profile: local iPad-landscape WebKit browser emulation, 1024 × 768, Touch Only, standard settings. This is not physical-iPad evidence.
 - Evidence: `output/playwright/ui-rollout-2026-07-15/00-baseline/run-01-counted/` contains 12 original PNGs for the required 11 report panels plus a redacted `run.json`. All listed SHA-256 hashes match; no identity, attempt/session ID, recipient, private URL, token, credential, or student data is recorded.
@@ -114,13 +114,12 @@ Active phase: **Five-Run, Three-Pass Swarm UI Rollout — Visual Pass 1**.
 
 Remaining rollout work, in order:
 
-1. Commit and push this verified Run 1 checkpoint, then send Email 1 with the inspected PDF.
-2. Visual Pass 1: correct identification contrast/disabled state, tutorial overflow and drag affordance, HUD/hotbar/action overlap, 56px critical targets, and the incorrect Overview/function instruction. Do not redesign scene art, scoring, mission rules, or Results.
-3. Counted Run 2: local iPad WebKit, 1024 × 680, Touch Only; verify no clipping/overlap, 56px critical targets, and one obvious next action. Review, report, commit/push, and send Email 2.
-4. Visual Pass 2 and counted Runs 3–4: improve chamber wayfinding, module selection, placement, structure-specific function evidence, drought/recovery cues, and accessibility validation; correct only Run 3 failures before Run 4.
-5. Visual Pass 3 and counted Run 5: polish dialogs, Overview, hints, grade breakdown, pause, results, practice, delivery status, and cohesion; verify the protected Preview and real synthetic backend path without promoting Production.
-6. Complete the final swarm audit, final handoff/commit/push, and Email 6.
-7. After the rollout, retain the pre-release external gates: live negative/retry/concurrency backend cases, shared-iPad pending-identity privacy, supervised physical-iPad access, physical device/network/student evidence, and post-device-gate asset/audio work.
+1. Visual Pass 1: correct identification contrast/disabled state, tutorial overflow and drag affordance, HUD/hotbar/action overlap, 56px critical targets, and the incorrect Overview/function instruction. Do not redesign scene art, scoring, mission rules, or Results.
+2. Counted Run 2: local iPad WebKit, 1024 × 680, Touch Only; verify no clipping/overlap, 56px critical targets, and one obvious next action. Review, report, commit/push, and send Email 2.
+3. Visual Pass 2 and counted Runs 3–4: improve chamber wayfinding, module selection, placement, structure-specific function evidence, drought/recovery cues, and accessibility validation; correct only Run 3 failures before Run 4.
+4. Visual Pass 3 and counted Run 5: polish dialogs, Overview, hints, grade breakdown, pause, results, practice, delivery status, and cohesion; verify the protected Preview and real synthetic backend path without promoting Production.
+5. Complete the final swarm audit, final handoff/commit/push, and Email 6.
+6. After the rollout, retain the pre-release external gates: live negative/retry/concurrency backend cases, shared-iPad pending-identity privacy, supervised physical-iPad access, physical device/network/student evidence, and post-device-gate asset/audio work.
 
 ## 8. Known risks, failures, and blockers
 
@@ -190,7 +189,7 @@ Failed gates trigger correction and retest. No user approval is needed between t
 1. Read current user instructions, the nearest `AGENTS.md`, `KEYUR_WORKFLOW.md`, and this file completely.
 2. Verify `git status`, current branch, HEAD/upstream, package lock, tests, GitHub Actions, deployment URLs, and backend state. Never trust stale prose over live evidence.
 3. Read the archived planning handoff only when a historical decision is missing here.
-4. Resume at the first unchecked item in section 7. Current counters are 1/5 counted runs, 0/3 visual passes, and 0/6 rollout emails until Email 1 is verified as sent. Use read → plan → implement → test.
+4. Resume at the first unchecked item in section 7. Current counters are 1/5 counted runs, 0/3 visual passes, and 1/6 rollout emails. Use read → plan → implement → test.
 5. In swarm mode, keep one implementation owner and independent read-only reviewers; route disagreement through the coordinator.
 6. After a passed gate, update sections 5–11 before commit/push. Rewrite current state and retain replaced decisions only in the short dated log.
 7. Never record credentials, OAuth details, student submissions, private names, or machine-local configuration.
