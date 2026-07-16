@@ -53,7 +53,7 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Verified release-test checkpoint: `15fe51f` (`Add protected preview verification`).
 - Verified live-backend runtime fix: `a1f01d8` (`fix: load Vercel submission validation at runtime`).
 - Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The live-backend runtime fix was pushed on 2026-07-14. Unrelated local edits to `AGENTS.md` and `KEYUR_WORKFLOW.md` remain outside project commits.
-- Five-run UI rollout remote checkpoint: `21c26fd` (`docs: record first visual pass`). It follows Visual Pass 1 implementation commit `55b8677`, harness commits `c7fabd8` and `5d37e28`, counted Run 1 commit `b7456af`, and retains application baseline `43ebed6`. Counted Run 2 was executed from this committed evidence harness. The user-owned `AGENTS.md` and `KEYUR_WORKFLOW.md` edits remain unstaged and excluded.
+- Five-run UI rollout remote checkpoint: `95b5ed9` (`docs: verify counted Run 2 report`). It follows Visual Pass 1 implementation commit `55b8677`, evidence checkpoint `21c26fd`, harness commits `c7fabd8` and `5d37e28`, counted Run 1 commit `b7456af`, and retains application baseline `43ebed6`. The user-owned `AGENTS.md` and `KEYUR_WORKFLOW.md` edits remain unstaged and excluded.
 - Vercel: project `cell-minecraft` is connected to `keyuuur/Cell-Minecraft` through the existing GitHub integration. `https://cell-minecraft.vercel.app` was created from the guidance-only `main` branch and is not an accepted game deployment. The protected `codex/build-a-living-cell` preview from `a1f01d8` is Ready at `https://cell-minecraft-git-codex-buil-5bd946-keyur159263-5904s-projects.vercel.app`. Its Apps Script URL and proxy key are Sensitive, Preview-only environment values; Production was not configured or promoted.
 - Google backend: the school-owned Sheet `Build a Living Cell - Results` is private to the owner and contains only `RawSubmissions` and `BestResults`. The matching Apps Script backend is deployed as a web app that executes as the owner and accepts anonymous requests while enforcing the proxy key and payload validation. No Google Sheet ID, Apps Script deployment URL, proxy key, account credentials, or other backend secret is stored in this handoff.
 
@@ -121,7 +121,7 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ### Counted UI rollout Run 2 - verified 2026-07-16
 
-- Status: **passed and counted as 2 of 5**. Visual passes remain 1 of 3. Rollout emails remain 1 of 6 because the Run 2 report and Email 2 are intentionally deferred to the first action after this checkpoint.
+- Status: **passed and counted as 2 of 5**. Visual passes remain 1 of 3. Email 2 was sent successfully with the verified PDF; rollout emails are 2 of 6.
 - Application commit: `55b8677e0ef8abfc5120063d779e049cc2b834ff`. Evidence harness commit: `21c26fd5993f5ac594aaeb4d2d869b2a1d22d8fd`.
 - Profile: local iPad-landscape WebKit browser emulation, 1024 x 680, Touch Only, standard settings. This is not physical-iPad evidence.
 - Evidence: `output/playwright/ui-rollout-2026-07-15/01-visual-pass-1/run-02-counted/` contains 12 usable original PNGs for the required 11 report panels plus a redacted `run.json`. Every listed SHA-256 hash matches the corresponding PNG, and the evidence contains no identity, attempt/session ID, recipient, private URL, token, credential, or student data.
@@ -130,19 +130,18 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 - All 12 original PNGs were inspected at original resolution and are usable. The intentionally oversized ribosome remains a known Visual Pass 2 finding rather than a Run 2 evidence defect.
 - The 13-page mobile report `output/pdf/build-a-living-cell-ui-rollout-run-02-visual-pass-1.pdf` was generated from the verified manifest, rendered back to 13 PNGs, and inspected page by page. Text extraction and raw-pixel checks confirmed accurate Run 2 labeling, matching evidence SHA, no clipping, no black-box corruption, and no stale baseline wording. Report SHA-256: `b948646176843b72c86a473904dd7b99e3fbc032e1e12cf0fb7ae18fa87c252e`.
 - Independent Playtest/QA, Student UX/Visual Direction, and Classroom Fit reviewers returned **GO with no mandatory findings**. Their shared later-pass findings are the oversized ribosome, weak distant depot/structure labels, scene wayfinding, and dense Overview layout; these do not invalidate Run 2.
-- Reporting gate: do not rerun or recount Run 2. Commit and push the verified report-generator/handoff checkpoint, send Email 2 once with the verified PDF, confirm the send, and then begin Visual Pass 2. Do not resend Email 1.
+- Reporting gate passed: report-generator and handoff checkpoint `95b5ed9` was committed and pushed before Email 2. The verified PDF was attached to one successful school-domain self-send. Do not rerun or recount Run 2, and do not resend Emails 1 or 2.
 
 ## 7. Current active phase and exact remaining work
 
-Active phase: **Five-Run, Three-Pass Swarm UI Rollout - counted Run 2 report delivery**.
+Active phase: **Five-Run, Three-Pass Swarm UI Rollout - Visual Pass 2 implementation and counted Run 3 candidate**.
 
 Remaining rollout work, in order:
 
-1. Commit and push the verified Run 2 report-generator/handoff checkpoint, send Email 2 once with the verified PDF, confirm the send, and record completion. Do not rerun Run 2 or resend Email 1.
-2. Visual Pass 2 and counted Runs 3–4: improve chamber wayfinding, module selection, placement, structure-specific function evidence, drought/recovery cues, and accessibility validation; correct only Run 3 failures before Run 4.
-3. Visual Pass 3 and counted Run 5: polish dialogs, Overview, hints, grade breakdown, pause, results, practice, delivery status, and cohesion; verify the protected Preview and real synthetic backend path without promoting Production.
-4. Complete the final swarm audit, final handoff/commit/push, and Email 6.
-5. After the rollout, retain the pre-release external gates: live negative/retry/concurrency backend cases, shared-iPad pending-identity privacy, supervised physical-iPad access, physical device/network/student evidence, and post-device-gate asset/audio work.
+1. Visual Pass 2 and counted Runs 3–4: improve chamber wayfinding, module selection, placement, structure-specific function evidence, drought/recovery cues, and accessibility validation; correct only Run 3 failures before Run 4.
+2. Visual Pass 3 and counted Run 5: polish dialogs, Overview, hints, grade breakdown, pause, results, practice, delivery status, and cohesion; verify the protected Preview and real synthetic backend path without promoting Production.
+3. Complete the final swarm audit, final handoff/commit/push, and Email 6.
+4. After the rollout, retain the pre-release external gates: live negative/retry/concurrency backend cases, shared-iPad pending-identity privacy, supervised physical-iPad access, physical device/network/student evidence, and post-device-gate asset/audio work.
 
 ## 8. Known risks, failures, and blockers
 
@@ -183,6 +182,7 @@ Final re-gate results:
 - **2026-07-14 backend swarm checkpoint:** Biology/content review found the synthetic payload stayed inside the approved eight-structure Unit 1 scope. Deployment review approved the private school-owned Sheet, Preview-only secrets, and original-receipt idempotency rule. Classroom review approved synthetic-only testing but kept real-student release blocked on the shared-iPad pending-identity risk and physical classroom evidence.
 - **2026-07-16 counted Run 1 checkpoint:** independent QA and Student UX reviewers approved the 12 original PNGs and redacted manifest as the required 11-panel baseline. Both prioritized the same Pass 1 corrections: hotbar/action separation, a compact landscape tutorial, a readable period selector, direct Inspect + Interact guidance, and 56px critical controls. They rejected apparent multi-image black-patch artifacts after inspecting original PNGs. Lower-priority structure identity, depot readability, function-specific cues, and Overview density remain assigned to their approved later passes.
 - **2026-07-16 Visual Pass 1 checkpoint:** Student UX, Classroom Fit, and Playtest/QA independently inspected the completed 1024 × 680 calibration, original PNGs, manifest, and action hierarchy. All three returned GO with no mandatory findings. The coordinator accepted the single-primary-action rule, completed-depot/observed-state copy, compact tutorial, 56px targets, and visible modal scrolling. Scene identity, depot legibility, function-specific feedback, and Overview/Results density remain bounded to Passes 2 and 3.
+- **2026-07-16 counted Run 2 checkpoint:** Playtest/QA, Student UX/Visual Direction, and Classroom Fit independently approved the 12 original PNGs, redacted manifest, and verified 13-page report. All returned GO with no mandatory findings. The coordinator accepted oversized ribosome scale, distant depot/structure labels, chamber wayfinding, placement/function feedback, and drought/recovery cues as bounded Visual Pass 2 work; dense Overview layout remains bounded to Visual Pass 3.
 
 ## 10. Future phase sequence and acceptance gates
 
@@ -212,7 +212,7 @@ Failed gates trigger correction and retest. No user approval is needed between t
 1. Read current user instructions, the nearest `AGENTS.md`, `KEYUR_WORKFLOW.md`, and this file completely.
 2. Verify `git status`, current branch, HEAD/upstream, package lock, tests, GitHub Actions, deployment URLs, and backend state. Never trust stale prose over live evidence.
 3. Read the archived planning handoff only when a historical decision is missing here.
-4. Resume at the first unchecked item in section 7. Current counters are 2/5 counted runs, 1/3 visual passes, and 1/6 rollout emails. Counted Run 2 is complete and must not be rerun or recounted; begin with its PDF/report review and Email 2, then start Visual Pass 2. Do not resend Email 1. Use read → plan → implement → test.
+4. Resume at the first unchecked item in section 7. Current counters are 2/5 counted runs, 1/3 visual passes, and 2/6 rollout emails. Counted Run 2 and Email 2 are complete; begin with Visual Pass 2 and do not rerun/recount completed runs or resend completed emails. Use read → plan → implement → test.
 5. In swarm mode, keep one implementation owner and independent read-only reviewers; route disagreement through the coordinator.
 6. After a passed gate, update sections 5–11 before commit/push. Rewrite current state and retain replaced decisions only in the short dated log.
 7. Never record credentials, OAuth details, student submissions, private names, or machine-local configuration.
