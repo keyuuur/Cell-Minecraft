@@ -66,7 +66,6 @@ export default function App() {
   const qualityMode = useGameStore((state) => state.qualityMode);
   const accessibility = useGameStore((state) => state.accessibility);
   const paused = useGameStore((state) => state.paused);
-  const activeElapsedMs = useGameStore((state) => state.activeElapsedMs);
   const score = useGameStore((state) => state.score);
   const submissionStatus = useGameStore((state) => state.submissionStatus);
   const hydrate = useGameStore((state) => state.hydrate);
@@ -390,11 +389,6 @@ export default function App() {
           >
             Safe reset
           </button>
-        </div>
-      )}
-      {screen === 'mission' && activeElapsedMs > 5 * 60 * 1000 && !mission.completed && (
-        <div className="stuck-prompt" role="status">
-          Need a nudge? Open Hint—there is no point deduction.
         </div>
       )}
     </div>

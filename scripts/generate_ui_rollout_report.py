@@ -97,6 +97,18 @@ DIAGNOSTIC_CAPTIONS = {
         "pattern, and enables the contextual Place action. The collection, objective, and zone "
         "instructions now agree.",
     ),
+    "diagnostic-accessibility-vacuole-actions.png": (
+        "Appendix C. Accessible long-label actions",
+        "The combined Touch Only, large-text, high-contrast, reduced-motion, and mute profile keeps "
+        "the central-vacuole Place and Remove actions readable, at least 56 pixels tall, and clear "
+        "of the joystick and neighboring HUD regions.",
+    ),
+    "diagnostic-accessibility-completion-actions.png": (
+        "Appendix D. Accessible completion layout",
+        "At mission completion, the final Submit action spans the right action cluster while the "
+        "virtual joystick, utilities, hotbar, and contextual controls remain separate and "
+        "center-hit-testable.",
+    ),
 }
 
 PHASE_LABELS = {

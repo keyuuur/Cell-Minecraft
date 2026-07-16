@@ -51,6 +51,11 @@ const evidenceSha = process.env.VISUAL_EVIDENCE_SHA ?? 'working-tree';
 const runNumber = Number(runId);
 const isCountedRun = Number.isInteger(runNumber) && runNumber > 0;
 const forceReloadRecovery = process.env.VISUAL_FORCE_RELOAD === 'true';
+const accessibilityAudit =
+  process.env.VISUAL_LARGE_TEXT === 'true' &&
+  process.env.VISUAL_HIGH_CONTRAST === 'true' &&
+  process.env.VISUAL_REDUCED_MOTION === 'true' &&
+  process.env.VISUAL_MUTE === 'true';
 const defaultYaw = 2.16;
 const recenterPosition: Point2 = { x: -18, z: 10 };
 
@@ -454,7 +459,7 @@ async function applyAccessibilityProfile(page: Page): Promise<void> {
   for (const [environmentName, label] of settings) {
     if (process.env[environmentName] !== 'true') continue;
     const checkbox = page.getByRole('checkbox', { name: label });
-    if (!(await checkbox.isChecked())) await activateVisibleControl(page, checkbox, label, true);
+    if (!(await checkbox.isChecked())) await activateVisibleControl(page, checkbox, label);
   }
 }
 
@@ -484,13 +489,170 @@ async function activateVisibleControl(
 }
 
 async function clickVisibleButton(page: Page, name: string): Promise<void> {
-  const button = page.getByRole('button', { name, exact: true });
-  await activateVisibleControl(page, button, name, true);
+  const button = actionButton(page, name);
+  await activateVisibleControl(page, button, name);
 }
 
 async function tapVisibleButton(page: Page, name: string): Promise<void> {
-  const button = page.getByRole('button', { name, exact: true });
+  const button = actionButton(page, name);
   await activateVisibleControl(page, button, name);
+}
+
+function actionButton(page: Page, name: string): Locator {
+  if (name === 'Interact') {
+    return page
+      .getByRole('button', {
+        name: /^(?:Interact|Collect .+|Inspect .+|Establish Cytoplasm|Restore water availability)$/,
+      })
+      .first();
+  }
+  if (name === 'Place') return page.getByRole('button', { name: /^Place(?: .+)?$/ }).first();
+  if (name === 'Remove selected') {
+    return page.getByRole('button', { name: /^Remove(?: selected| .+)?$/ }).first();
+  }
+  return page.getByRole('button', { name, exact: true });
+}
+
+function overlaps(
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number },
+): boolean {
+  return !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
+  );
+}
+
+async function assertCriticalTouchLayout(page: Page): Promise<void> {
+  const joystick = page.getByLabel('Movement joystick');
+  const joystickBounds = await joystick.boundingBox();
+  if (!joystickBounds) throw new Error('Touch-only joystick was not visible.');
+
+  const controls = page.locator(
+    '.hud-top button:visible, .utility-cluster button:visible, .action-cluster button:visible, .hotbar button.is-selected:visible',
+  );
+  for (let index = 0; index < (await controls.count()); index += 1) {
+    const control = controls.nth(index);
+    const bounds = await control.boundingBox();
+    if (!bounds) throw new Error(`Visible touch control ${index + 1} had no bounds.`);
+    expect(bounds.width, `touch control ${index + 1} width`).toBeGreaterThanOrEqual(56);
+    expect(bounds.height, `touch control ${index + 1} height`).toBeGreaterThanOrEqual(56);
+    expect(overlaps(joystickBounds, bounds), `touch control ${index + 1} overlaps joystick`).toBe(
+      false,
+    );
+    const centerIsControl = await control.evaluate(
+      (element, { x, y }) => element.contains(document.elementFromPoint(x, y)),
+      { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 },
+    );
+    expect(centerIsControl, `touch control ${index + 1} owns its center hit target`).toBe(true);
+  }
+
+  const regions = await Promise.all(
+    ['.utility-cluster', '.hotbar', '.action-cluster'].map(async (selector) => {
+      const bounds = await page.locator(selector).boundingBox();
+      if (!bounds) throw new Error(`Missing HUD region: ${selector}`);
+      return { selector, bounds };
+    }),
+  );
+  for (let left = 0; left < regions.length; left += 1) {
+    for (let right = left + 1; right < regions.length; right += 1) {
+      expect(
+        overlaps(regions[left].bounds, regions[right].bounds),
+        `${regions[left].selector} overlaps ${regions[right].selector}`,
+      ).toBe(false);
+    }
+  }
+
+  const horizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(horizontalOverflow, 'page horizontal overflow').toBeLessThanOrEqual(1);
+}
+
+async function assertHotbarLabelsReadable(page: Page): Promise<void> {
+  const labels = page.locator('.hotbar button span');
+  for (let index = 0; index < (await labels.count()); index += 1) {
+    const label = labels.nth(index);
+    const geometry = await label.evaluate((element) => {
+      const labelBounds = element.getBoundingClientRect();
+      const buttonBounds = element.closest('button')?.getBoundingClientRect();
+      return buttonBounds
+        ? {
+            text: element.textContent?.trim() ?? 'hotbar label',
+            left: labelBounds.left >= buttonBounds.left - 1,
+            right: labelBounds.right <= buttonBounds.right + 1,
+            top: labelBounds.top >= buttonBounds.top - 1,
+            bottom: labelBounds.bottom <= buttonBounds.bottom + 1,
+          }
+        : null;
+    });
+    if (!geometry) throw new Error(`Hotbar label ${index + 1} was not inside a button.`);
+    expect(
+      geometry.left && geometry.right && geometry.top && geometry.bottom,
+      `${geometry.text} remains fully inside its hotbar button`,
+    ).toBe(true);
+  }
+}
+
+async function assertAccessibleDialog(
+  page: Page,
+  dialogName: string,
+  criticalControlName: string,
+): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: dialogName });
+  const dialogBounds = await dialog.boundingBox();
+  if (!dialogBounds) throw new Error(`${dialogName} dialog had no visible bounds.`);
+  expect(dialogBounds.y).toBeGreaterThanOrEqual(0);
+  expect(dialogBounds.y + dialogBounds.height).toBeLessThanOrEqual(viewportHeight);
+  const horizontalOverflow = await dialog.evaluate(
+    (element) => element.scrollWidth - element.clientWidth,
+  );
+  expect(horizontalOverflow, `${dialogName} horizontal overflow`).toBeLessThanOrEqual(1);
+  const controlBounds = await page
+    .getByRole('button', { name: criticalControlName, exact: true })
+    .boundingBox();
+  if (!controlBounds) throw new Error(`${criticalControlName} had no visible bounds.`);
+  expect(controlBounds.width).toBeGreaterThanOrEqual(56);
+  expect(controlBounds.height).toBeGreaterThanOrEqual(56);
+}
+
+async function assertHighContrastPrimaryAction(page: Page): Promise<void> {
+  const primary = page.locator('.action-cluster .action-primary');
+  await expect(primary).toHaveCount(1);
+  const structuralCue = await primary.evaluate((element) => {
+    const style = getComputedStyle(element);
+    const parseRgb = (value: string) =>
+      value
+        .match(/[\d.]+/g)
+        ?.slice(0, 3)
+        .map(Number) ?? [0, 0, 0];
+    const luminance = (rgb: number[]) => {
+      const channels = rgb.map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const foreground = luminance(parseRgb(style.color));
+    const background = luminance(parseRgb(style.backgroundColor));
+    const contrastRatio =
+      (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+    return {
+      borderStyle: style.borderTopStyle,
+      outlineStyle: style.outlineStyle,
+      contrastRatio,
+    };
+  });
+  expect(
+    structuralCue.borderStyle === 'double' || structuralCue.outlineStyle !== 'none',
+    'high-contrast primary action has a structural cue',
+  ).toBe(true);
+  expect(
+    structuralCue.contrastRatio,
+    'high-contrast primary action text contrast',
+  ).toBeGreaterThanOrEqual(4.5);
 }
 
 async function clickRecenter(page: Page): Promise<void> {
@@ -498,7 +660,6 @@ async function clickRecenter(page: Page): Promise<void> {
     page,
     page.getByRole('button', { name: 'Recenter', exact: true }),
     'Recenter',
-    true,
   );
 }
 
@@ -515,15 +676,15 @@ async function collectFromDepot(page: Page, id: keyof typeof structureLabels): P
   );
   if (id === 'cytoplasm') {
     await expect(page.locator('.next-station-cue')).toContainText('Nucleus or Ribosomes');
-    await expect(page.getByRole('button', { name: 'Place' })).not.toHaveClass(/action-primary/);
-    await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
+    await expect(actionButton(page, 'Place')).not.toHaveClass(/action-primary/);
+    await expect(actionButton(page, 'Interact')).not.toHaveClass(/action-primary/);
     await expect(page.locator('.action-cluster .action-primary')).toHaveCount(0);
   } else {
     await expect(page.getByRole('button', { name: label, exact: true })).toHaveClass(/is-selected/);
     await expect(page.locator('.placement-guide.is-blocked')).toContainText('BLOCKED');
-    await expect(page.getByRole('button', { name: 'Place' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Place' })).not.toHaveClass(/action-primary/);
-    await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
+    await expect(actionButton(page, 'Place')).toBeDisabled();
+    await expect(actionButton(page, 'Place')).not.toHaveClass(/action-primary/);
+    await expect(actionButton(page, 'Interact')).not.toHaveClass(/action-primary/);
     await expect(page.locator('.action-cluster .action-primary')).toHaveCount(0);
   }
 }
@@ -546,7 +707,7 @@ async function inspectStructure(
   await expect(
     page.getByText(`Observed: ${label}`).or(page.locator('.next-station-cue')),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Interact' })).not.toHaveClass(/action-primary/);
+  await expect(actionButton(page, 'Interact')).not.toHaveClass(/action-primary/);
   await expect(page.locator('.action-cluster .action-primary')).toHaveCount(0);
 }
 
@@ -554,12 +715,12 @@ async function selectVisibleHotbarItem(page: Page, label: string): Promise<void>
   const button = page.getByRole('button', { name: label, exact: true });
   await button.scrollIntoViewIfNeeded();
   await expect(button).toBeVisible();
-  await activateVisibleControl(page, button, label, true);
+  await activateVisibleControl(page, button, label);
   await expect(button).toHaveClass(/is-selected/);
 }
 
 async function moveUntilPlacementValid(page: Page, attempts: number): Promise<void> {
-  const place = page.getByRole('button', { name: 'Place', exact: true });
+  const place = actionButton(page, 'Place');
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (await place.isEnabled()) {
       await expect(page.locator('.placement-guide.is-valid')).toContainText('VALID ZONE');
@@ -584,7 +745,7 @@ async function moveToPlacementZone(
   if (settleMs > 0) {
     await holdForward(page, settleMs);
     await page.waitForTimeout(220);
-    await expect(page.getByRole('button', { name: 'Place', exact: true })).toBeEnabled();
+    await expect(actionButton(page, 'Place')).toBeEnabled();
     await expect(page.locator('.placement-guide.is-valid')).toContainText('VALID ZONE');
   }
 }
@@ -713,6 +874,11 @@ test.describe('real-control visual rollout evidence', () => {
     await tapVisibleButton(page, 'Continue to controls');
     await completeControlPractice(page);
     await applyAccessibilityProfile(page);
+    if (accessibilityAudit) {
+      for (const label of ['Large text', 'High contrast', 'Reduced motion', 'Mute sounds']) {
+        await expect(page.getByRole('checkbox', { name: label })).toBeChecked();
+      }
+    }
     await page.getByRole('button', { name: 'Start mission and timer' }).scrollIntoViewIfNeeded();
     await capture(page, screenshots, 2, 'controls-practice-complete', true);
     const missionStartClickedAt = Date.now();
@@ -725,6 +891,31 @@ test.describe('real-control visual rollout evidence', () => {
       visible: controlProfile === 'touch-only',
       timeout: 1_000,
     });
+    if (accessibilityAudit) {
+      const shell = page.getByTestId('app-shell');
+      await expect(shell).toHaveClass(/large-text/);
+      await expect(shell).toHaveClass(/high-contrast/);
+      await expect(shell).toHaveClass(/reduced-motion/);
+      await assertCriticalTouchLayout(page);
+      const motionDurationsMs = await page
+        .locator('.hud-button')
+        .first()
+        .evaluate((element) => {
+          const style = getComputedStyle(element);
+          const toMilliseconds = (value: string) =>
+            Number.parseFloat(value) * (value.trim().endsWith('ms') ? 1 : 1_000);
+          return {
+            animation: toMilliseconds(style.animationDuration),
+            transition: toMilliseconds(style.transitionDuration),
+          };
+        });
+      expect(motionDurationsMs.animation).toBeLessThanOrEqual(0.01);
+      expect(motionDurationsMs.transition).toBeLessThanOrEqual(0.01);
+      semanticAssertions.push(
+        'touch-only large-text high-contrast reduced-motion mute profile was visibly applied',
+        'critical touch controls were at least 56px, center hit-testable, and clear of the joystick',
+      );
+    }
     const missionReadyMs = Date.now() - missionStartClickedAt;
     expect(missionReadyMs, 'mission becomes interactive within ten seconds').toBeLessThanOrEqual(
       10_000,
@@ -733,6 +924,10 @@ test.describe('real-control visual rollout evidence', () => {
     graphicsContextChecks += 1;
     await clickVisibleButton(page, 'Pause');
     await expect(page.getByRole('dialog', { name: 'Mission paused' })).toBeVisible();
+    if (accessibilityAudit) {
+      await assertAccessibleDialog(page, 'Mission paused', 'Resume mission');
+      await expect(page.locator('.stuck-prompt')).toHaveCount(0);
+    }
     const timerWhilePaused = await page.locator('.timer-card strong').textContent();
     await page.waitForTimeout(1_200);
     await expect(page.locator('.timer-card strong')).toHaveText(timerWhilePaused ?? '15:00');
@@ -741,9 +936,18 @@ test.describe('real-control visual rollout evidence', () => {
     semanticAssertions.push('visible Pause and Resume held the active timer');
 
     await navigateFromRecenter(page, stations.cellWall, /Nearby:\s*Cell wall panels/i);
+    if (accessibilityAudit) {
+      await expect(page.getByRole('button', { name: 'Collect Cell wall panels' })).toBeVisible();
+      await assertHighContrastPrimaryAction(page);
+      semanticAssertions.push(
+        'touch-only actions used contextual accessible names and a structural high-contrast primary cue',
+      );
+    }
     await capture(page, screenshots, 3, 'mission-opening');
 
     await collectFromDepot(page, 'cellWall');
+    await expect(page.getByRole('button', { name: 'Place Cell wall panels' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Remove Cell wall panels' })).toBeVisible();
     await captureDiagnostic(page, diagnosticScreenshots, 'placement-blocked');
     semanticAssertions.push('blocked placement was shown before movement into the outer wall zone');
     await placeBoundaryPanels(page, 'cellWall', async () => {
@@ -855,6 +1059,17 @@ test.describe('real-control visual rollout evidence', () => {
     await capture(page, screenshots, 6, 'mitochondria-and-chloroplasts');
 
     await collectFromDepot(page, 'centralVacuole');
+    if (accessibilityAudit) {
+      await expect(page.getByRole('button', { name: 'Place Large central vacuole' })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Remove Large central vacuole' }),
+      ).toBeVisible();
+      await assertCriticalTouchLayout(page);
+      await assertHotbarLabelsReadable(page);
+      await assertGraphicsHealthy(page);
+      graphicsContextChecks += 1;
+      await captureDiagnostic(page, diagnosticScreenshots, 'accessibility-vacuole-actions');
+    }
     await placeCentralVacuole(page);
     await holdMovement(page, 0, -1, 450);
     await page.waitForTimeout(360);
@@ -868,6 +1083,13 @@ test.describe('real-control visual rollout evidence', () => {
 
     await clickVisibleButton(page, 'Overview');
     await expect(page.getByRole('dialog', { name: 'Cell overview' })).toBeVisible();
+    if (accessibilityAudit) {
+      await assertAccessibleDialog(page, 'Cell overview', 'Close overview');
+      await expect(page.locator('.stuck-prompt')).toHaveCount(0);
+      semanticAssertions.push(
+        'Pause and Overview dialogs fit the viewport, avoided horizontal overflow, and suppressed the stuck prompt',
+      );
+    }
     await expect(page.getByText('100% recorded')).toBeVisible();
     await expect(page.getByText('100% pressure')).toBeVisible();
     await expect(page.getByText(/Baseline: the vacuole is full/)).toBeVisible();
@@ -890,6 +1112,14 @@ test.describe('real-control visual rollout evidence', () => {
     await clickVisibleButton(page, 'Close overview');
 
     await expect(page.getByText(/Cell stable/)).toBeVisible();
+    if (accessibilityAudit) {
+      await expect(page.getByRole('button', { name: 'Submit final result' })).toBeVisible();
+      await assertCriticalTouchLayout(page);
+      await captureDiagnostic(page, diagnosticScreenshots, 'accessibility-completion-actions');
+      semanticAssertions.push(
+        'long contextual actions and final submission remained touchable without HUD or joystick overlap',
+      );
+    }
     await assertGraphicsHealthy(page);
     graphicsContextChecks += 1;
     const receiptResponsePromise = page.waitForResponse((response) => {
@@ -925,7 +1155,7 @@ test.describe('real-control visual rollout evidence', () => {
     expect(pageErrors, 'page errors').toEqual([]);
     expect(unallowedConsoleErrors, 'unallowlisted console errors').toEqual([]);
     expect(screenshots).toHaveLength(12);
-    expect(diagnosticScreenshots).toHaveLength(2);
+    expect(diagnosticScreenshots).toHaveLength(accessibilityAudit ? 4 : 2);
     expect(submissionCallCount, 'submission request count').toBe(1);
     expect(submissionProbe?.attemptId, 'nonempty transient attempt ID').toBeTruthy();
     expect(submissionProbe?.completed, 'completed submission').toBe(true);

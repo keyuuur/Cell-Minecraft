@@ -285,7 +285,10 @@ test('iPad-size controls stay touchable and do not overlap the joystick', async 
     'Remove selected',
   ];
   for (const name of controls) {
-    const button = page.getByRole('button', { name }).first();
+    const button =
+      name === 'Interact'
+        ? page.locator('.action-cluster .context-action')
+        : page.getByRole('button', { name }).first();
     const bounds = await button.boundingBox();
     if (!bounds) throw new Error(`Missing control: ${String(name)}`);
     expect(bounds.width).toBeGreaterThanOrEqual(56);

@@ -42,6 +42,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
   const [showHints, setShowHints] = useState(false);
   const [hintLevel, setHintLevel] = useState(0);
   const modalTriggerRef = useRef<HTMLElement | null>(null);
+  const selectedHotbarRef = useRef<HTMLButtonElement | null>(null);
   const status = statusValues(mission);
   const activeStations = activeStationIds(mission);
   const secondsLeft = Math.max(0, 15 * 60 - Math.floor(activeElapsedMs / 1000));
@@ -82,6 +83,28 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
     !(nearbyStation && !nearbyStationComplete) &&
     !(nearbyStructure && !nearbyFunctionObserved),
   );
+  const showNearbyStationLabel = Boolean(
+    nearbyStation &&
+    !selectedItem &&
+    (!nearbyStationComplete || !nextStationLabel) &&
+    !(nearbyStationComplete && nearbyStructure && !nearbyFunctionObserved),
+  );
+  const showNearbyStructureLabel = Boolean(
+    nearbyStructure &&
+    !selectedItem &&
+    (!nearbyFunctionObserved || !nextStationLabel) &&
+    !(nearbyStation && !nearbyStationComplete),
+  );
+  const interactLabel =
+    nearbyStation && !nearbyStationComplete
+      ? nearbyStation === 'waterStation'
+        ? 'Restore water availability'
+        : nearbyStation === 'cytoplasm'
+          ? 'Establish Cytoplasm'
+          : `Collect ${STRUCTURE_LABELS[nearbyStation]}`
+      : nearbyStructure && !nearbyFunctionObserved
+        ? `Inspect ${STRUCTURE_LABELS[nearbyStructure]}`
+        : 'Interact';
 
   useEffect(() => {
     sceneRef.current?.setPaused(modalOpen);
@@ -103,6 +126,14 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
       modalTriggerRef.current?.focus();
     }
   }, [paused, showHints, showOverview, showScore]);
+
+  useEffect(() => {
+    if (!selectedItem) return;
+    const frame = window.requestAnimationFrame(() => {
+      selectedHotbarRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedItem]);
 
   return (
     <div className="hud" aria-label="Mission controls">
@@ -152,7 +183,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
         <div className="feedback-toast" role="status">
           {mission.lastFeedback}
         </div>
-        {nearbyStation && !selectedItem && (!nearbyStationComplete || !nextStationLabel) && (
+        {showNearbyStationLabel && nearbyStation && (
           <div className="nearby-label">
             {nearbyStationComplete ? (
               <>
@@ -173,15 +204,12 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
             )}
           </div>
         )}
-        {!nearbyStation &&
-          nearbyStructure &&
-          !selectedItem &&
-          (!nearbyFunctionObserved || !nextStationLabel) && (
-            <div className="nearby-label">
-              {nearbyFunctionObserved ? 'Observed' : 'Inspect'}: {STRUCTURE_LABELS[nearbyStructure]}
-              {!nearbyFunctionObserved && ' — tap Interact'}
-            </div>
-          )}
+        {showNearbyStructureLabel && nearbyStructure && (
+          <div className="nearby-label">
+            {nearbyFunctionObserved ? 'Observed' : 'Inspect'}: {STRUCTURE_LABELS[nearbyStructure]}
+            {!nearbyFunctionObserved && ' — tap Interact'}
+          </div>
+        )}
         {selectedItem && placementPreview && (
           <div className={`placement-guide is-${placementPreview.status}`} role="status">
             <strong>{placementPreview.status === 'valid' ? '✓ VALID ZONE' : '✕ BLOCKED'}</strong>
@@ -223,6 +251,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
                   type="button"
                   key={id}
                   aria-label={STRUCTURE_LABELS[structureId]}
+                  ref={selectedItem === id ? selectedHotbarRef : undefined}
                   className={`${selectedItem === id ? 'is-selected' : ''} ${installed ? 'is-installed' : ''} ${needsRepair ? 'needs-repair' : ''}`}
                   aria-pressed={selectedItem === id}
                   onClick={() => selectItem(structureId)}
@@ -239,6 +268,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
           <button
             className={`hud-button context-action ${interactIsPrimary ? 'action-primary' : ''}`}
             type="button"
+            aria-label={interactLabel}
             onClick={interact}
           >
             Interact
@@ -246,7 +276,7 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
           <button
             className={`hud-button ${placeIsPrimary ? 'action-primary' : ''}`}
             type="button"
-            aria-label="Place"
+            aria-label={selectedItem ? `Place ${STRUCTURE_LABELS[selectedItem]}` : 'Place'}
             disabled={Boolean(selectedItem && placementPreview?.status !== 'valid')}
             onClick={() =>
               placeSelected(
@@ -263,11 +293,22 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
           <button
             className="hud-button"
             type="button"
-            aria-label="Remove selected"
+            aria-label={
+              selectedItem ? `Remove ${STRUCTURE_LABELS[selectedItem]}` : 'Remove selected'
+            }
             onClick={removeSelected}
           >
             {selectedItem ? `Remove ${STRUCTURE_LABELS[selectedItem]}` : 'Remove selected'}
           </button>
+          {mission.completed && !mission.practice && (
+            <button
+              className="hud-button completion-submit"
+              type="button"
+              onClick={() => submitAttempt(false)}
+            >
+              Submit final result
+            </button>
+          )}
         </div>
 
         <div className="utility-cluster">
@@ -309,15 +350,6 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
           >
             Hint
           </button>
-          {mission.completed && !mission.practice && (
-            <button
-              className="hud-button compact completion-submit"
-              type="button"
-              onClick={() => submitAttempt(false)}
-            >
-              Submit final result
-            </button>
-          )}
         </div>
 
         {isTestMode && (
@@ -420,6 +452,11 @@ export function GameHud({ fps, sceneRef, isTestMode }: GameHudProps) {
               </button>
             )}
           </section>
+        </div>
+      )}
+      {activeElapsedMs > 5 * 60 * 1000 && !mission.completed && !modalOpen && (
+        <div className="stuck-prompt" role="status">
+          Need a nudge? Open Hint—there is no point deduction.
         </div>
       )}
     </div>

@@ -722,6 +722,7 @@ select option {
   background: rgba(5, 21, 17, 0.9);
   overflow-x: auto;
   overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
   scrollbar-color: var(--accent) rgba(5, 21, 17, 0.9);
 }
 .hotbar button {
@@ -736,6 +737,7 @@ select option {
   gap: 3px;
   align-content: center;
   text-align: left;
+  scroll-snap-align: center;
 }
 .hotbar button span {
   font-weight: 850;
@@ -778,6 +780,9 @@ select option {
   gap: 8px;
 }
 .action-cluster .context-action {
+  grid-column: 1 / -1;
+}
+.action-cluster .completion-submit {
   grid-column: 1 / -1;
 }
 .utility-cluster {
@@ -1008,6 +1013,10 @@ select option {
   white-space: normal;
   line-height: 1.15;
 }
+.large-text .hotbar button {
+  flex-basis: 156px;
+  min-width: 156px;
+}
 .high-contrast {
   --surface: #000;
   --surface-2: #000;
@@ -1022,6 +1031,12 @@ select option {
 .high-contrast .hotbar {
   background: #000;
   border-color: #fff;
+}
+.high-contrast .hud-button.action-primary {
+  color: #fff06a;
+  border: 4px double #fff06a;
+  outline: 2px solid #fff;
+  outline-offset: -7px;
 }
 .high-contrast input,
 .high-contrast select {
@@ -1228,7 +1243,7 @@ select option {
     bottom: 6px;
   }
   .stuck-prompt {
-    bottom: 130px;
+    bottom: 202px;
   }
 }
 
