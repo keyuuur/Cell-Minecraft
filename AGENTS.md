@@ -36,6 +36,15 @@
 ## Classroom-game helper roles
 - For normal classroom-game development, Codex may summon whichever helper roles fit the task. When Keyur says `swarm mode`, Codex must use role-based helpers and produce a coordinator-mediated synthesis through the main thread.
 - Small or narrow tasks may use a reduced role subset, but swarm mode cannot skip role-based review entirely. Follow `KEYUR_WORKFLOW.md` for model choice, risk posture, and coordinator-mediated roundtable behavior.
+
+### Helper-model routing
+
+- Use `gpt-5.3-codex-spark` only for fast, bounded, text-only coding iterations with clear scope and objective checks: small fixes, focused tests, mechanical refactors, and narrow code review. Choose it when latency matters more than broad capability.
+- Use `gpt-5.6-terra` as the minimum general-purpose helper model for normal coding, investigation, multi-file work, and tasks needing stronger context or tool use.
+- Use `gpt-5.6-sol` only when Keyur or a project rule authorizes higher-model work: broad ambiguity, complex architecture, high-risk reasoning, or high-fanout swarm review.
+- Never select Luna for these local helper workflows.
+- Preserve an explicit user model request. If Spark is unavailable, use Terra and report the fallback and the actual model used.
+- Model choice never grants helper, write, deployment, external-action, or approval authority.
 - `Coordinator / Producer`: owns scope, sequencing, final synthesis, and the shared brief.
 - `Learning Objective + Content Reviewer`: checks the classroom learning goal, science/content accuracy, and misconception coverage.
 - `Classroom Fit Reviewer`: checks iPad-first use, class-period timing, teacher setup, student friction, and replay practicality.
@@ -50,6 +59,13 @@
   - Discovery/design: Coordinator, Learning Objective + Content Reviewer, Classroom Fit Reviewer, Game Loop Designer, Student UX / HUD Designer, and Skeptical Reviewer.
   - Build: Coordinator, Gameplay / Frontend Engineer, Student UX / HUD Designer, Playtest / QA Engineer, plus Visual / Asset Direction Lead or Deployment / Classroom Ops Reviewer when relevant.
   - Release/readiness: Coordinator, Playtest / QA Engineer, Classroom Fit Reviewer, Deployment / Classroom Ops Reviewer, Skeptical Reviewer, and Learning Objective + Content Reviewer.
+
+## Durable orchestration memory
+- The Coordinator / Producer must apply the durable-memory protocol in `KEYUR_WORKFLOW.md` when a classroom project materially spans phases or sessions, uses role-based helpers, locks a learning/design/architecture/safety decision, or has a release, deployment, recovery, data, or device-verification gate.
+- Use `docs/handoffs/PROJECT_CONTEXT.md` for stable decisions and `docs/handoffs/CURRENT_STATUS.md` for current verified posture unless the child project already has an established durable handoff. Never create a second competing authority merely to match the default filenames.
+- Before assigning helpers, the coordinator reads relevant durable memory, checks it against live Git/source/test state, and gives each role only the decisions and constraints that improve that role's work. Helpers flag contradictions and handoff-worthy findings; the coordinator decides what is durable and writes the update.
+- The shared blank templates live under `Teacher Coding Projects/docs/handoff-templates/` when this workspace is available. Portable child repositories may follow the complete file contract in `KEYUR_WORKFLOW.md` when the shared templates are absent.
+- Project-specific child instructions may extend or tighten the protocol. Small one-session tasks without durable consequences should not accumulate handoff files.
 
 ## Project notes
 - Classroom games and labs should prioritize reliability, classroom safety, and easy testing over fancy animation.

@@ -46,7 +46,15 @@ Fail closed when uncertainty could cause real damage: wrong recipients, wrong fa
 
 Fail closed does not mean stop constantly. It means choose the safer reversible action when evidence is incomplete: inspect more, draft in chat, leave a file ready for review, mark uncertainty, or ask for approval.
 
-Model and helper-agent selection is part of risk posture. Codex may choose helper agents and models based on task size, difficulty, risk, needed context depth, and parallelism. Use cheaper/smaller helpers for narrow evidence-checkable work and stronger helpers for broad, ambiguous, or high-risk reasoning. Respect current tool limits, project-specific helper-agent modes, and any explicit model or conservative-review request from Keyur. If a project defines sticky orchestration modes, keep the selected mode active until the project rules or Keyur reset it. High-fanout or higher-model modes require either an explicit user request or a project rule that authorizes them.
+### Helper-model routing
+
+- Use `gpt-5.3-codex-spark` only for fast, bounded, text-only coding iterations with clear scope and objective checks: small fixes, focused tests, mechanical refactors, and narrow code review. Choose it when latency matters more than broad capability.
+- Use `gpt-5.6-terra` as the minimum general-purpose helper model for normal coding, investigation, multi-file work, and tasks needing stronger context or tool use.
+- Use `gpt-5.6-sol` only when Keyur or a project rule authorizes higher-model work: broad ambiguity, complex architecture, high-risk reasoning, or high-fanout swarm review.
+- Never select Luna for these local helper workflows.
+- Preserve an explicit user model request. If Spark is unavailable, use Terra and report the fallback and the actual model used.
+- Model choice never grants helper, write, deployment, external-action, or approval authority.
+- Respect current tool limits and sticky project orchestration modes. High-fanout or Sol work requires an explicit user request or a project rule.
 
 When helper agents are used, Codex remains the coordinator and final decision owner. Agents respond to each other's findings through the main Codex thread, not direct agent-to-agent chat. For larger, riskier, sensitive, live-mutating, deployment, broad source-change, student/family-data, Gmail/calendar/gradebook, or external-facing tasks, use a coordinator-mediated roundtable: independent role passes, one shared brief, cross-review of weak evidence or unsafe assumptions, then a final coordinator decision. For small or narrow tasks, scale this down and say briefly when cross-review is unnecessary.
 
@@ -85,6 +93,44 @@ For long-running projects, handoff docs are working memory. Keep them short, cur
 Update handoffs on meaningful state changes: scope or strategy changes, new risks, tested completion, capability changes, boundary shifts, deployment changes, or important read-only validation. Do not turn handoffs into full transcripts.
 
 Treat read-only, draft-only, no-edit, sensitive approval gates, unsafe git state, or missing remote configuration as limits on handoff writes/pushes. In those turns, report any handoff-worthy note in chat and carry it into the next write-enabled handoff update.
+
+### Automatic durable-memory decision
+
+At orientation, the coordinator must decide whether durable project memory is warranted without waiting for Keyur to request it. The protocol applies when any of these conditions is materially relevant to the work:
+
+- Three or more meaningful phases, role-based/swarm work, or likely continuation across sessions or days.
+- A product, learning, content, visual, architecture, stack, data, privacy, deployment, or classroom-safety decision that should not be casually reopened.
+- A release gate, test or device matrix, deployment sequence, recovery requirement, or external-service dependency.
+- Multiple active branches, a dirty worktree that overlaps the task or could confuse continuation, or a major strategy change including rejected approaches that must stay rejected.
+
+Do not create durable memory for a truly narrow single-session fix, simple content edit, isolated research question, or small task with no durable consequence. An unrelated dirty file does not trigger the protocol by itself. When a positive trigger and a small-task exception appear to conflict, use the future-session test: create or update memory only if a competent future coordinator could otherwise reopen a settled decision, misread current posture, or resume unsafely.
+
+### Standard project-local contract
+
+Unless a project already has an established durable handoff convention, use:
+
+- `docs/handoffs/PROJECT_CONTEXT.md` for stable, longer-lived decisions.
+- `docs/handoffs/CURRENT_STATUS.md` for short operational state.
+
+`PROJECT_CONTEXT.md` records project purpose and audience; current product or learning goals; approved architecture and stack; non-negotiable constraints and safety boundaries; important design/content decisions and their reasons; rejected approaches and their reasons; durable role-agent findings; canonical visual, curriculum, deployment, and data references; and conditions that justify reconsideration. Exclude transcripts, temporary speculation, credentials, student data, and unverified claims presented as fact.
+
+`CURRENT_STATUS.md` records the last-updated date and scope; current branch and worktree posture; phase and completion state; latest verified commit or checkpoint; the latest completed changes; tests, screenshots, deployments, and other directly verified evidence; known risks, failures, and unverified items; exact next actions; and explicit do-not-change/deploy/merge/assume boundaries. Never claim a test, deployment, or physical-device check passed without direct current-session evidence.
+
+The shared blank templates are under `Teacher Coding Projects/docs/handoff-templates/`. They are optional scaffolds; the contract above remains authoritative for portable child repositories. If a child already has a durable convention, keep it and map these stable/current responsibilities into that convention rather than creating competing truth. A temporary next-session note is not automatically a durable convention.
+
+### Coordinator ownership and role-agent use
+
+- The main Codex thread or Coordinator / Producer owns durable-memory decisions and writes.
+- Before a qualifying task, read the applicable durable files, then compare them with current user instructions, Git state, source, tests, and deployment evidence. Live evidence wins; state contradictions plainly and correct the handoff at the next authorized checkpoint.
+- Give each helper a short shared brief and only the sections relevant to its role. Ask helpers to flag contradictions and findings worth preserving. Do not make every role read every handoff by default.
+- Role agents report durable findings to the coordinator and do not independently rewrite memory unless specifically assigned. Even when assigned, their claims require coordinator verification before closeout.
+- Handoffs document state and constraints; they never authorize edits, commits, pushes, deployments, external calls, or live mutation.
+
+### Startup, updates, and closeout
+
+For a qualifying task, start by reading the durable files, inspecting current branch/worktree/latest commits and relevant verification state, and identifying any drift before planning or assigning roles. Update `PROJECT_CONTEXT.md` only for durable decisions. Update `CURRENT_STATUS.md` after a completed phase, scope/strategy change, significant risk or blocker, useful commit checkpoint, release/deployment gate result, interruption, or pause likely to resume.
+
+At closeout, record only completed work and explicit uncertainty; link relevant tests, screenshots, deployment notes, or canonical references; state what remains blocked or approval-gated; and tell Keyur which memory changed. Maintain summaries instead of chronological diaries. If the active task is read-only or otherwise forbids writes, report the exact handoff-worthy delta in chat and defer the file update.
 
 ## Actions that need explicit approval
 
