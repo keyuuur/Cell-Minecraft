@@ -52,6 +52,7 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Repository: `https://github.com/keyuuur/Cell-Minecraft`
 - Active local branch: `codex/build-a-living-cell`
 - Voxel-rebuild strategy baseline: local HEAD and upstream both matched `494ec1387ae58bbc6f4d314cfe0bd1e0d8fc2a7a` (`docs: close UI rollout`) before Phase 0. User-owned edits to `AGENTS.md` and `KEYUR_WORKFLOW.md` remain unstaged and excluded.
+- Phase 0 strategy-reset checkpoint: `132c73ca83be94e0927bd827a173d1f63f4019bc` (`docs: start voxel gameplay rebuild`). No Phase 1 application or proof-route code is included in this checkpoint.
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
 - Verified release-test checkpoint: `15fe51f` (`Add protected preview verification`).
@@ -233,11 +234,13 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ## 7. Current active phase and exact remaining work
 
-Active phase: **Approved voxel-adventure rebuild — Phase 0 strategy reset and Phase 1 isolated gameplay proof**.
+Active phase: **Approved voxel-adventure rebuild — Phase 0 complete; Phase 1 isolated gameplay proof not started**.
 
 The previous Five-Run, Three-Pass rollout is complete and none of its runs or six emails should be repeated. Its Biology, scoring, persistence, backend, accessibility, and classroom-flow evidence remains historical functional evidence.
 
-The current bounded work is:
+Phase 0 updated the durable strategy, superseded presentation decisions, acceptance boundaries, risks, swarm conclusions, phase sequence, and restart instructions. The coordinator intentionally stopped before Phase 1 so Codex could be updated and restarted from a clean checkpoint.
+
+The next bounded work is:
 
 1. Preserve the existing graded mission and backend while adding a separate `/?proof=voxel` route that is unavailable in Production.
 2. Prove first-person walking, drag-look, crosshair targeting, an original visible builder pick, mining progress, block break, physical drop, collection, nine-slot hotbar feedback, valid wall-anchor placement, removal, collection, and replacement.
