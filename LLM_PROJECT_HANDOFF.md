@@ -1,6 +1,6 @@
 # Build a Living Cell — LLM Project Handoff
 
-Last updated: 2026-07-16
+Last updated: 2026-07-19
 
 ## 1. Project purpose and classroom audience
 
@@ -28,6 +28,8 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Stack: Vite, React, TypeScript, Babylon.js, Zustand, IndexedDB, Google Apps Script/Sheets, and Vercel.
 - React owns screens and HUD; Babylon owns the stable scene and frame loop; pure TypeScript owns rules, scoring, and serializable state.
 - Fixed `24 × 24 × 12` chamber, typed occupancy data, batched/instanced boundary visuals, broad placement zones, and no general chunk engine.
+- The approved presentation target is a bright, bounded voxel construction yard around the fixed chamber. First-person walking and drag-look, a center crosshair, an original visible builder pick, ray-targeted mining, a physical pickup, a nine-slot hotbar, and target-based placement are required gameplay verbs.
+- The first voxel checkpoint is an isolated, non-scoring proof route. It does not collect identity, run the graded timer, write IndexedDB mission state, submit results, or alter the existing verified mission state.
 - Eight visible function-evidence events must be earned in the chamber. Opening Overview never awards function points.
 - Corrections restore full credit; hints do not deduct points; impossible placement is blocked immediately.
 - Rubric: boundary 15, required structures 30, placement/context 15, activation/functions 20, drought recovery 15, final stability 5.
@@ -43,11 +45,13 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - 2026-07-13: Function credit from an Overview checklist was rejected. Evidence now comes from nearby, in-world inspection and visible system changes.
 - 2026-07-13: A submitted grade is now an immutable snapshot. Post-submission practice cannot change the recorded outcome.
 - 2026-07-14: The earlier plan to use a personal Gmail account was superseded. The project has no personal Gmail account; the dedicated Sheet and Apps Script backend are owned by the school-domain Google Workspace account.
+- 2026-07-19: The accepted dark laboratory, smooth procedural-organelles, proximity-depot interaction, and "no fourth visual pass" posture were superseded for presentation quality. They remain historical functional evidence only and are not evidence that the game meets its Minecraft-inspired gameplay target.
 
 ## 5. Verified repository, branch, commit, and deployment state
 
 - Repository: `https://github.com/keyuuur/Cell-Minecraft`
 - Active local branch: `codex/build-a-living-cell`
+- Voxel-rebuild strategy baseline: local HEAD and upstream both matched `494ec1387ae58bbc6f4d314cfe0bd1e0d8fc2a7a` (`docs: close UI rollout`) before Phase 0. User-owned edits to `AGENTS.md` and `KEYUR_WORKFLOW.md` remain unstaged and excluded.
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
 - Verified release-test checkpoint: `15fe51f` (`Add protected preview verification`).
@@ -229,15 +233,17 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ## 7. Current active phase and exact remaining work
 
-Active phase: **Five-Run, Three-Pass Swarm UI Rollout complete - pre-release external gates remain**.
+Active phase: **Approved voxel-adventure rebuild — Phase 0 strategy reset and Phase 1 isolated gameplay proof**.
 
-The approved rollout has no remaining work and none of its six emails should be resent. Pre-release work resumes only at these external gates:
+The previous Five-Run, Three-Pass rollout is complete and none of its runs or six emails should be repeated. Its Biology, scoring, persistence, backend, accessibility, and classroom-flow evidence remains historical functional evidence.
 
-1. Live negative/retry/concurrency backend cases and shared-iPad pending-delivery identity privacy.
-2. Supervised protected-Preview access on a physical school iPad.
-3. Physical Safari/WebGL performance, 20-minute soak, typical 30 FPS, 10-second school-Wi-Fi load, simultaneous multitouch, orientation/background recovery, and hardware-keyboard checks.
-4. Student pilot evidence: at least 80% independent completion, at least 70% of time in game actions, and discoverable drought recovery.
-5. Optimized original glTF/audio work only after physical-device measurements justify it. Production promotion remains blocked until all applicable release gates pass.
+The current bounded work is:
+
+1. Preserve the existing graded mission and backend while adding a separate `/?proof=voxel` route that is unavailable in Production.
+2. Prove first-person walking, drag-look, crosshair targeting, an original visible builder pick, mining progress, block break, physical drop, collection, nine-slot hotbar feedback, valid wall-anchor placement, removal, collection, and replacement.
+3. Use only fictional model-building supplies and state clearly that real cells do not mine, craft, or install organelles.
+4. Capture a new original-resolution voxel-rebuild evidence series. Do not count it as a sixth run in the completed rollout.
+5. Keep Production unpromoted. The full mission rebuild begins only after this proof passes its code, browser, visual, Biology, classroom, and skeptical gates.
 
 ## 8. Known risks, failures, and blockers
 
@@ -249,8 +255,10 @@ The approved rollout has no remaining work and none of its six emails should be 
 - **Payload risk:** Babylon is isolated in a lazy bundle but remains the largest download. Low mode and real-device evidence are mandatory before release.
 - **Rate limiting:** Apps Script rate limiting is best effort, not an authentication boundary. Assignment tokens remain routing data rather than secrets.
 - **Shared-iPad privacy risk:** a pending delivery necessarily preserves the earlier attempt payload, including its student identity, until a receipt arrives. Before classroom use, verify that starting a new student session cannot display or attach that prior identity while background delivery continues.
-- **Asset gate:** current visuals are original, efficient procedural low-poly assets. Optimized original glTF prefabs and optional audio remain a post-device-gate release task.
-- **Visual Pass 3 posture:** responsive dialog, Overview, hint, grade-breakdown, pause, Results/practice/delivery-status, and cross-screen-cohesion work passed the exact protected Preview and counted Run 5 gates. No fourth visual pass is planned; remaining UI acceptance depends on physical-device and classroom evidence.
+- **Voxel-proof isolation risk:** the proof must not mutate the current mission store, save envelope, submission payload, timer, identity flow, or backend. It is an in-memory interaction and visual-direction gate only.
+- **Visual-direction risk:** adding cubes or a decorative pickaxe to the existing laboratory is a failed proof. The opening must read as a bright first-person block-building game before instructions are read.
+- **Biology-metaphor risk:** mining is limited to clearly labeled model-building supplies. Organelles are not ores, cytoplasm is not a mineable solid, and no recipe represents real cell construction.
+- **Asset gate:** all block textures, tool geometry, UI, sounds, and future prefabs must be original. Optional audio and optimized assets remain constrained by physical-device measurements.
 
 ## 9. Swarm review findings and coordinator decisions
 
@@ -288,16 +296,18 @@ Final re-gate results:
 - **2026-07-16 Preview test-classification checkpoint:** Playtest/QA and Deployment/Ops independently confirmed that `api/submit.ts` is the authoritative trust boundary: production-shaped client input remains false while non-production forwarding is forced true. The deployed Sheet proved the accepted uncounted row was stored as test data and excluded from `BestResults`. After requiring exact raw-boolean preservation and an explicit fresh-browser-context gate, both reviewers returned GO for evidence SHA `1e0b68b4b93eb557588b1184b122f8800c82653e`, a fresh exact-Preview run, and the updated two-raw/zero-best baseline; no backend code change, deletion, or identifier persistence is permitted.
 - **2026-07-16 counted Run 5 checkpoint:** Playtest/QA, Deployment/Ops, Biology/Learning Content, Classroom Fit, Game Loop, Student UX/Visual Direction, and Skeptical lanes approved the exact protected-Preview manifest and all 18 original PNGs. The coordinator accepted the run at app SHA `f64fb5301d16f2275d4fc35297d1e4ed2ed3d9f5` with evidence SHA `1e0b68b4b93eb557588b1184b122f8800c82653e`: one accepted visible submission, exact-payload original-receipt idempotency, three raw test rows, no fourth duplicate row, zero best-result rows, zero errors, and zero WebGL loss. All lanes explicitly retained physical-device and classroom gates.
 - **2026-07-16 final rollout audit:** Playtest/QA, Classroom Fit, Deployment/Ops, Skeptical, Biology/Learning Content, Student UX/HUD, Visual Direction, and Game Loop lanes independently reviewed the completed run set, original-resolution baseline/final evidence, reports, automated tests, deployment/backend posture, and remaining release gates. QA's only initial P2 was a stale classroom-release checklist description of test classification; the coordinator corrected it to document the production-shaped client plus Preview proxy-forced `isTest=true` behavior and to leave unproved live failure cases open. The QA re-gate and every other lane returned **GO with no P0-P2 finding**. No fourth visual pass is authorized or needed from emulated evidence; physical-device and student evidence remain external gates.
+- **2026-07-19 voxel-rebuild planning checkpoint:** Visual/Game Loop, Gameplay/Frontend and iPad QA, Biology/Classroom Fit, Student UX, and Skeptical lanes independently agreed that the laboratory cannot be cosmetically polished into the approved target. The coordinator locked a separate proof route so the verified mission remains intact. The proof requires real crosshair targeting, a functional original builder pick, visible mining progress, a physical drop, collection, compact hotbar feedback, target-based placement, and a remove/collect/replace repair loop. Cosmetic pickaxe overlays, proximity collection, player-foot placement, copied Minecraft assets, organelle ores, chunk streaming, crafting, combat, and block grinding are rejection cases.
 
 ## 10. Future phase sequence and acceptance gates
 
-1. **Local release candidate:** green checks, browser flows, swarm re-gate, committed and pushed.
-2. **Preview:** live Vercel smoke, production-safe tooling check, and diagnostics.
-3. **Backend, core path passed:** dedicated private Sheet, Apps Script deployment, Preview-only environment configuration, synthetic accepted/duplicate checks, one-row persistence, and test-row exclusion. Live rejected/retry/concurrency checks remain.
-4. **Physical device:** oldest available iPad load/soak, typical iPad ≥30 FPS, touch-only simultaneous control, orientation/background/reload recovery, and Low mode.
-5. **Classroom pilot:** ≥80% complete without teacher rescue, ≥70% of time in game actions, drought recovery discoverable, and no names on public/projector surfaces.
-6. **Asset/audio release pass:** optimized original glTF prefabs and optional nonessential original sound, constrained by physical-device measurements.
-7. **Production:** promote only when all applicable gates are recorded as passed.
+1. **Phase 1 — isolated voxel proof:** bright bounded yard, real first-person controls, target outline, original visible pick, mine/drop/collect/hotbar/place/remove/replace loop, original-resolution evidence, and swarm re-gate.
+2. **Phase 2 — voxel foundation:** pure world/block/inventory models, tested grid raycast, collision and auto-step, regional dirty-mesh renderer, target-face placement, pooled pickups, and save-schema planning without a general chunk engine.
+3. **Phase 3 — boundary vertical slice:** voxel plant-cell foundation, six outer wall modules, six inner membrane modules, cytoplasm fill, invalid correction, scoring adapter, and real-control browser evidence.
+4. **Phase 4 — complete structure mission:** original voxel prefabs for nucleus, ribosomes, mitochondria, chloroplasts, and central vacuole with in-world Unit 1 function evidence.
+5. **Phase 5 — drought and classroom integration:** reversible vacuole/turgor/wilt sequence, minimal HUD, real-world tutorial, accessibility, timer, hints, results, persistence migration, and backend compatibility.
+6. **Phase 6 — release candidate:** complete Chromium/WebKit matrices, protected Preview, backend regression, swarm audit, and new voxel-rebuild evidence packet.
+7. **Physical device and classroom:** oldest available iPad load/soak, typical iPad ≥30 FPS, touch-only simultaneous control, orientation/background/reload recovery, school Wi-Fi, hardware keyboard, ≥80% independent completion, ≥70% active game actions, and discoverable drought recovery.
+8. **Production:** promote only when all applicable gates are recorded as passed.
 
 Failed gates trigger correction and retest. No user approval is needed between these steps. Missing credentials, physical-device evidence, school-network evidence, or a required architecture/data-destination expansion are external blockers.
 
@@ -317,7 +327,7 @@ Failed gates trigger correction and retest. No user approval is needed between t
 1. Read current user instructions, the nearest `AGENTS.md`, `KEYUR_WORKFLOW.md`, and this file completely.
 2. Verify `git status`, current branch, HEAD/upstream, package lock, tests, GitHub Actions, deployment URLs, and backend state. Never trust stale prose over live evidence.
 3. Read the archived planning handoff only when a historical decision is missing here.
-4. Resume at the first applicable external gate in section 7. The Five-Run, Three-Pass Swarm UI Rollout is complete at 5/5 counted runs, 3/3 visual passes, and 6/6 verified rollout emails. Do not rerun or recount Runs 1-5, do not accept calibrations or superseded Preview attempts as counted evidence, and do not resend any rollout email. Counted Run 5 passed at app SHA `f64fb5301d16f2275d4fc35297d1e4ed2ed3d9f5` with evidence SHA `1e0b68b4b93eb557588b1184b122f8800c82653e`; the private Sheet has three raw test rows, no duplicate fourth row, and zero best rows; and the final 20-page audit report is verified at SHA-256 `5cdb200dd3ece22fa687a870073209f35609d4436b4833f56e77b462207324e8`. Use read → plan → implement → test.
+4. Resume the voxel-rebuild phase recorded in section 7. The Five-Run, Three-Pass rollout remains complete historical functional evidence at 5/5 counted runs, 3/3 visual passes, and 6/6 verified emails; do not rerun, recount, or resend it. The active presentation target is now the bounded first-person voxel experience. Use read → plan → implement → test.
 5. In swarm mode, keep one implementation owner and independent read-only reviewers; route disagreement through the coordinator.
 6. After a passed gate, update sections 5–11 before commit/push. Rewrite current state and retain replaced decisions only in the short dated log.
 7. Never record credentials, OAuth details, student submissions, private names, or machine-local configuration.
