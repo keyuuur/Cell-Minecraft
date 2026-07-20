@@ -428,7 +428,12 @@ export class VoxelProofScene {
     for (let x = -1; x <= 1; x += 1) {
       world.set({ x, y: 1, z: 6 }, VoxelBlock.Step);
     }
-    // A two-block rail proves that the same grid also blocks movement.
+    // A rear safety rail gives visible controls a direct collision check off the work route.
+    for (let x = -1; x <= 1; x += 1) {
+      world.set({ x, y: 1, z: 11 }, VoxelBlock.Stone);
+      world.set({ x, y: 2, z: 11 }, VoxelBlock.Stone);
+    }
+    // A side rail keeps the same collision language visible elsewhere in the yard.
     for (let z = 1; z <= 3; z += 1) {
       world.set({ x: 5, y: 1, z }, VoxelBlock.Stone);
       world.set({ x: 5, y: 2, z }, VoxelBlock.Stone);

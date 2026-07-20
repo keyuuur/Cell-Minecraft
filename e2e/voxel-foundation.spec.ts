@@ -48,6 +48,61 @@ async function holdJoystick(
   await page.waitForTimeout(250);
 }
 
+async function nudgeJoystickUntilCellChanges(
+  page: Page,
+  proof: Locator,
+  direction: 'forward' | 'backward' | 'left' | 'right',
+): Promise<void> {
+  const previousCell = await proof.getAttribute('data-foundation-player-cell');
+  if (!previousCell) throw new Error('Player cell was unavailable before joystick movement.');
+  const joystick = page.getByRole('application', { name: /Movement joystick/ });
+  const box = await joystick.boundingBox();
+  if (!box) throw new Error('Movement joystick was not visible.');
+  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const destination =
+    direction === 'forward'
+      ? { x: center.x, y: box.y + box.height * 0.12 }
+      : direction === 'backward'
+        ? { x: center.x, y: box.y + box.height * 0.88 }
+        : {
+            x: box.x + box.width * (direction === 'left' ? 0.12 : 0.88),
+            y: center.y,
+          };
+  await page.mouse.move(center.x, center.y);
+  await page.mouse.down();
+  await page.mouse.move(destination.x, destination.y, { steps: 4 });
+  try {
+    await expect(proof).not.toHaveAttribute('data-foundation-player-cell', previousCell, {
+      timeout: 2_000,
+    });
+  } finally {
+    await page.mouse.up();
+  }
+  await page.waitForTimeout(100);
+}
+
+async function retreatFromTarget(
+  page: Page,
+  proof: Locator,
+  minimumCellDistance = 2,
+  maximumNudges = 8,
+): Promise<void> {
+  for (let index = 0; index < maximumNudges; index += 1) {
+    const playerCell = ((await proof.getAttribute('data-foundation-player-cell')) ?? '').split(',');
+    const targetCell = ((await proof.getAttribute('data-foundation-target-cell')) ?? '').split(',');
+    const playerX = Number(playerCell[0]);
+    const playerZ = Number(playerCell[2]);
+    const targetX = Number(targetCell[0]);
+    const targetZ = Number(targetCell[2]);
+    if (![playerX, playerZ, targetX, targetZ].every(Number.isFinite)) {
+      throw new Error('Player or target cell was unavailable before retreat.');
+    }
+    if (Math.hypot(playerX - targetX, playerZ - targetZ) >= minimumCellDistance) return;
+    await nudgeJoystickUntilCellChanges(page, proof, 'backward');
+  }
+  throw new Error(`Player did not retreat ${minimumCellDistance} grid units from the target.`);
+}
+
 async function walkForwardUntilCellZ(
   page: Page,
   proof: Locator,
@@ -63,23 +118,76 @@ async function walkForwardUntilCellZ(
   throw new Error(`Player did not reach z <= ${maximumCellZ} through visible movement.`);
 }
 
-async function walkUntilCellX(
+async function walkBackwardUntilCellZ(
   page: Page,
   proof: Locator,
-  targetCellX: number,
+  minimumCellZ: number,
   maximumPulses = 12,
 ): Promise<void> {
   for (let index = 0; index < maximumPulses; index += 1) {
     const cell = (await proof.getAttribute('data-foundation-player-cell')) ?? '';
-    const x = Number(cell.split(',')[0]);
-    if (x === targetCellX) return;
-    if (!Number.isFinite(x)) throw new Error('Player x cell was unavailable.');
-    await holdJoystick(page, x > targetCellX ? 'left' : 'right', 150);
+    const z = Number(cell.split(',')[2]);
+    if (Number.isFinite(z) && z >= minimumCellZ) return;
+    await holdJoystick(page, 'backward', 150);
   }
-  throw new Error(`Player did not reach x cell ${targetCellX} through visible movement.`);
+  throw new Error(`Player did not reach z >= ${minimumCellZ} through visible movement.`);
 }
 
-async function walkRightUntilMinimumCellX(
+async function walkToOrAcrossCellX(
+  page: Page,
+  proof: Locator,
+  targetCellX: number,
+  maximumPulses = 24,
+): Promise<void> {
+  const visitedCells: number[] = [];
+  for (let index = 0; index < maximumPulses; index += 1) {
+    const cell = (await proof.getAttribute('data-foundation-player-cell')) ?? '';
+    const x = Number(cell.split(',')[0]);
+    if (Number.isFinite(x)) visitedCells.push(x);
+    if (x === targetCellX) return;
+    if (!Number.isFinite(x)) throw new Error('Player x cell was unavailable.');
+    await nudgeJoystickUntilCellChanges(page, proof, x > targetCellX ? 'left' : 'right');
+    const nextCell = (await proof.getAttribute('data-foundation-player-cell')) ?? '';
+    const nextX = Number(nextCell.split(',')[0]);
+    if (
+      nextX === targetCellX ||
+      (x < targetCellX && nextX > targetCellX) ||
+      (x > targetCellX && nextX < targetCellX)
+    ) {
+      return;
+    }
+  }
+  throw new Error(
+    `Player did not reach or cross x cell ${targetCellX} through visible movement. Last cells: ${visitedCells.slice(-12).join(',')}.`,
+  );
+}
+
+async function walkToOrAcrossCellZ(
+  page: Page,
+  proof: Locator,
+  targetCellZ: number,
+  maximumPulses = 24,
+): Promise<void> {
+  for (let index = 0; index < maximumPulses; index += 1) {
+    const cell = (await proof.getAttribute('data-foundation-player-cell')) ?? '';
+    const z = Number(cell.split(',')[2]);
+    if (z === targetCellZ) return;
+    if (!Number.isFinite(z)) throw new Error('Player z cell was unavailable.');
+    await nudgeJoystickUntilCellChanges(page, proof, z > targetCellZ ? 'forward' : 'backward');
+    const nextCell = (await proof.getAttribute('data-foundation-player-cell')) ?? '';
+    const nextZ = Number(nextCell.split(',')[2]);
+    if (
+      nextZ === targetCellZ ||
+      (z < targetCellZ && nextZ > targetCellZ) ||
+      (z > targetCellZ && nextZ < targetCellZ)
+    ) {
+      return;
+    }
+  }
+  throw new Error(`Player did not reach or cross z cell ${targetCellZ} through visible movement.`);
+}
+
+async function walkBackwardUntilMinimumCellX(
   page: Page,
   proof: Locator,
   minimumCellX: number,
@@ -89,7 +197,7 @@ async function walkRightUntilMinimumCellX(
     const cell = (await proof.getAttribute('data-foundation-player-cell')) ?? '';
     const x = Number(cell.split(',')[0]);
     if (Number.isFinite(x) && x >= minimumCellX) return;
-    await holdJoystick(page, 'right', 150);
+    await holdJoystick(page, 'backward', 150);
   }
   throw new Error(
     `Player did not reach x cell ${minimumCellX} or greater through visible movement.`,
@@ -137,11 +245,10 @@ test('voxel foundation completes through visible controls without persistence or
   await expect(proof).toHaveAttribute('data-proof-phase', 'collect-supplies');
   await expect(proof).toHaveAttribute('data-foundation-pickups-active', '3');
 
-  await walkForwardUntilCellZ(page, proof, 4);
-  if ((await proof.getAttribute('data-proof-phase')) === 'collect-supplies') {
-    await holdJoystick(page, 'left', 450);
-    await holdJoystick(page, 'right', 900);
-    await holdJoystick(page, 'left', 450);
+  await walkToOrAcrossCellZ(page, proof, 4);
+  for (const targetCellX of [-1, 0, 1, 0, -1, 0, 1, 0]) {
+    if ((await proof.getAttribute('data-proof-phase')) !== 'collect-supplies') break;
+    await walkToOrAcrossCellX(page, proof, targetCellX);
   }
   await expect(proof).toHaveAttribute('data-proof-phase', 'select-block');
   await expect(proof).toHaveAttribute('data-foundation-pickups-active', '0');
@@ -152,14 +259,18 @@ test('voxel foundation completes through visible controls without persistence or
   for (const face of ['FRONT', 'SIDE', 'TOP']) {
     await recenterUntilFace(page, recenter, face as 'FRONT' | 'SIDE' | 'TOP');
     await page.getByRole('button', { name: 'PLACE' }).click();
-    if (face === 'FRONT') await walkUntilCellX(page, proof, -1);
-    if (face === 'SIDE') await walkRightUntilMinimumCellX(page, proof, 0);
+    if (face === 'FRONT') await walkToOrAcrossCellZ(page, proof, -1);
+    if (face === 'SIDE') await walkBackwardUntilMinimumCellX(page, proof, 2);
   }
   await expect(proof).toHaveAttribute('data-proof-phase', 'select-tool');
 
   await page.getByRole('button', { name: /Slot 1: Builder/ }).click();
   await recenter.click();
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(300);
+  await expect(page.locator('.voxel-proof-target-label')).toContainText(/INSTALLED BUILDER BLOCK/);
+  await retreatFromTarget(page, proof);
+  await recenter.click();
+  await page.waitForTimeout(300);
   await expect(page.locator('.voxel-proof-target-label')).toContainText(/INSTALLED BUILDER BLOCK/);
   await holdActionUntil(page, mine, () =>
     expect(proof).toHaveAttribute('data-proof-phase', 'collect-repair', { timeout: 5_000 }),
@@ -175,7 +286,7 @@ test('voxel foundation completes through visible controls without persistence or
   await expect(proof).toHaveAttribute('data-foundation-pickups-reused', '1');
 
   await page.getByRole('button', { name: /Slot 2: Builder Block/ }).click();
-  await holdJoystick(page, 'backward', 700);
+  await nudgeJoystickUntilCellChanges(page, proof, 'backward');
   await recenterUntilFace(page, recenter, 'FRONT');
   await page.getByRole('button', { name: 'PLACE' }).click();
 
@@ -214,10 +325,9 @@ test('visible joystick movement stops at the full-height rail', async ({ page })
   const proof = page.locator('main.voxel-proof');
   await expect(proof).toHaveAttribute('data-foundation-player-cell', /^\d+,\d+,\d+$/);
 
-  await walkUntilCellX(page, proof, 5, 20);
-  await walkForwardUntilCellZ(page, proof, 4, 30);
+  await walkBackwardUntilCellZ(page, proof, 10);
   const stoppedCell = await proof.getAttribute('data-foundation-player-cell');
-  await holdJoystick(page, 'forward', 1_500);
+  await holdJoystick(page, 'backward', 1_500);
 
   await expect(proof).toHaveAttribute('data-foundation-player-cell', stoppedCell!);
   await expect(proof).toHaveAttribute('data-foundation-auto-steps', '0');
