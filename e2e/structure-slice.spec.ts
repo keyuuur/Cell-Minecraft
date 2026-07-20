@@ -190,6 +190,10 @@ test('complete structure slice uses visible controls and restores correction cre
   await expect(slice).toHaveAttribute('data-structure-count', '3');
   await expect(slice).toHaveAttribute('data-foundation-storage-writes', '0');
   await expect(slice).toHaveAttribute('data-foundation-api-requests', '0');
+  const modelNote = page.locator('.voxel-proof-model-note');
+  await expect(modelNote).toBeVisible();
+  await expect(modelNote).toContainText('organelles are installed prefabs, not ores');
+  await expect(modelNote).toContainText('not a ninth structure');
   await capture(page, images, '01-opening-structure-mission.png');
 
   await holdForward(page, browserName, 220);

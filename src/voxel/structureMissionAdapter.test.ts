@@ -139,4 +139,26 @@ describe('complete structure mission voxel adapter', () => {
       }),
     ).toBeNull();
   });
+
+  it('rejects serialized placements outside their scored zones or canonical height', () => {
+    const valid = completeAddedStructures();
+    expect(
+      parseStructureMissionVoxelState({
+        ...valid,
+        placements: { ...valid.placements, nucleus: { x: 9, y: 1, z: 0 } },
+      }),
+    ).toBeNull();
+    expect(
+      parseStructureMissionVoxelState({
+        ...valid,
+        placements: { ...valid.placements, centralVacuole: { x: 5, y: 1, z: 0 } },
+      }),
+    ).toBeNull();
+    expect(
+      parseStructureMissionVoxelState({
+        ...valid,
+        placements: { ...valid.placements, mitochondria: { x: -6, y: 2, z: -3 } },
+      }),
+    ).toBeNull();
+  });
 });

@@ -54,6 +54,12 @@ const isFinitePoint = (value: unknown): value is Point3 => {
   );
 };
 
+const isCanonicalStructurePlacement = (id: PlaceableStructureId, position: Point3): boolean => {
+  if (position.y !== 1) return false;
+  const zoneLimit = id === 'centralVacuole' ? 4 : 8;
+  return Math.abs(position.x) <= zoneLimit && Math.abs(position.z) <= zoneLimit;
+};
+
 const knownStructureKeysOnly = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) &&
   typeof value === 'object' &&
@@ -209,7 +215,12 @@ export function validateStructureMissionVoxelState(
     const placement = state.placements[id];
     const evidence = state.functionEvidence[id];
     if (collected !== undefined && typeof collected !== 'boolean') return false;
-    if (placement !== undefined && !isFinitePoint(placement)) return false;
+    if (
+      placement !== undefined &&
+      (!isFinitePoint(placement) || !isCanonicalStructurePlacement(id, placement))
+    ) {
+      return false;
+    }
     if (evidence !== undefined && typeof evidence !== 'boolean') return false;
     if (placement && !collected) return false;
     if (evidence && !placement) return false;
