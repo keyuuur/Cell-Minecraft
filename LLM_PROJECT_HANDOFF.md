@@ -55,7 +55,7 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Phase 0 strategy-reset start: `132c73ca83be94e0927bd827a173d1f63f4019bc` (`docs: start voxel gameplay rebuild`).
 - Phase 0 final planning checkpoint: `7bcc7cf` (`docs: checkpoint voxel rebuild phase 0`).
 - Phase 1 working base: local HEAD and upstream both matched `f10a9473c16f0e6c32f47f289ff7ec9303267f4b` (`Sync local changes to GitHub`). That earlier authorized checkpoint includes `AGENTS.md` and `KEYUR_WORKFLOW.md`; Phase 1 did not modify either file.
-- Phase 1 isolated-proof implementation checkpoint: pending the commit created from this passed gate. The follow-up handoff checkpoint must record its exact SHA before closeout.
+- Phase 1 isolated-proof implementation checkpoint: `9b9688a62805be4fade30cd030e9c67c70fea9bf` (`feat: add voxel gameplay proof`). The browser evidence and final `npm run check` used this exact application source. The follow-up handoff checkpoint records the verified SHA without changing application code.
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
 - Verified release-test checkpoint: `15fe51f` (`Add protected preview verification`).
@@ -88,10 +88,12 @@ Record the handoff-checkpoint commit, upstream branch, and deployment URL after 
 
 ### Voxel rebuild Phase 1 verified 2026-07-19
 
+- Application and evidence source SHA: `9b9688a62805be4fade30cd030e9c67c70fea9bf`.
 - The isolated `/?proof=voxel` development route branches before the graded `App` module loads. It uses React-local and pure TypeScript in-memory state only; it creates no IndexedDB database, browser storage, cookie, student identity, timer, score, submission queue, or `/api` request.
 - The route presents a bright bounded voxel yard, block path, plant-cell construction frame, center crosshair, original first-person builder pick, real five-unit ray targeting, visible mining progress, physical pickup, nine-slot hotbar, target-only placement, removal, recollection, and repair.
 - Production excludes the proof JS/CSS bundle. A production build request to `?proof=voxel` renders the safe unavailable screen with no canvas; the ordinary graded startup screen remains unchanged.
 - Original-resolution evidence under ignored `output/playwright/voxel-proof-2026-07-19/` contains 15 final PNGs plus browser traces. It covers opening, mining, drop, collection, invalid and valid placement, Pause, installed wall, removal, recollection, repair, 1024 × 680 touch-only completion, safe WebGL loss, and held-joystick Pause recovery. These are voxel-rebuild proof artifacts, not a sixth counted rollout run.
+- The redacted local `run.json` records 15 matching PNG hashes and trace hashes. Manifest SHA-256: `4a5eef7cecdbb2d25faac0cfad5f732229f9434a1ca5f43ac5902cbd5358b326`. It contains no identity, attempt/session ID, credential, token, private URL, or student data.
 - The 1024 × 768 keyboard + drag-look route and 1024 × 680 touch-only joystick route both completed through visible controls. Compact layout had zero document overflow and no control smaller than 56 × 56.
 - Pause/resume clears keyboard, mining, pointer, and joystick state at both boundaries. A pointer held on the joystick before Pause cannot restart movement after Resume. WebGL context loss permanently stops gameplay input until reload.
 - `npm run check` passed formatting, ESLint, TypeScript, 47 Vitest/component/API tests, and the production build.
