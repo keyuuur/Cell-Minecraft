@@ -1,0 +1,105 @@
+.structure-slice .voxel-proof-objective {
+  width: min(490px, calc(100vw - 315px));
+}
+
+.structure-slice .voxel-proof-utilities {
+  grid-template-columns: repeat(3, minmax(96px, auto));
+}
+
+.structure-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 7px 0;
+}
+
+.structure-progress span {
+  padding: 3px 6px;
+  border: 2px dashed rgb(255 242 176 / 62%);
+  color: #fff2bc;
+  background: rgb(10 24 17 / 62%);
+  font-size: 0.66rem;
+}
+
+.structure-progress span.is-placed {
+  border-style: solid;
+  border-color: #ffd56b;
+  color: #fff4c9;
+}
+
+.structure-progress span.is-observed {
+  border-style: solid;
+  border-color: #cfff78;
+  color: #eaffbd;
+  background: rgb(39 77 35 / 85%);
+}
+
+.structure-actions {
+  gap: 7px;
+}
+
+.structure-actions button {
+  min-width: 92px;
+}
+
+.structure-actions button:disabled {
+  opacity: 0.46;
+  cursor: default;
+}
+
+.structure-hotbar {
+  width: min(590px, calc(100vw - 300px));
+}
+
+.structure-hotbar button strong {
+  font-size: 0.64rem;
+}
+
+.structure-zone-cue {
+  position: absolute;
+  z-index: 5;
+  top: calc(50% + 67px);
+  left: 50%;
+  min-width: 250px;
+  transform: translateX(-50%);
+  padding: 7px 10px;
+  border: 3px solid #cfff78;
+  color: #f5ffd7;
+  background: rgb(20 45 29 / 92%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.structure-zone-cue.is-blocked {
+  border-color: #ff8b73;
+  background: repeating-linear-gradient(135deg, #5b2f26 0 10px, #71382d 10px 20px);
+}
+
+.structure-zone-cue small {
+  display: block;
+  max-width: 36ch;
+  margin-top: 3px;
+  font-size: 0.62rem;
+}
+
+.structure-complete {
+  width: min(500px, calc(100vw - 34px));
+}
+
+@media (max-height: 700px) {
+  .structure-slice .voxel-proof-objective {
+    padding: 8px 11px;
+  }
+
+  .structure-slice .voxel-proof-objective h1 {
+    font-size: 0.9rem;
+  }
+
+  .structure-slice .voxel-proof-model-note {
+    display: none;
+  }
+
+  .structure-progress span {
+    font-size: 0.58rem;
+  }
+}

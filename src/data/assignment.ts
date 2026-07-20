@@ -84,12 +84,13 @@ export const STRUCTURE_VISIBLE_EFFECTS: Record<StructureId, string> = {
   cytoplasm:
     "Game cue: the interior fill brightens after the cell's gelatin-like internal medium is observed.",
   nucleus:
-    'Game cue: rings highlight the DNA-containing nucleus after its role in helping control cell activities is observed.',
-  ribosomes: 'Game cue: the bead cluster brightens after its protein-making function is observed.',
+    'Game cue: DNA bars and a control-signal stack illuminate after the nucleus function is observed.',
+  ribosomes:
+    'Game cue: a short protein-chain model extends from the ribosome cluster after its function is observed.',
   mitochondria:
-    'Game cue: bands highlight the mitochondria after their glucose-breakdown and cellular-energy function is observed.',
+    'Game cue: amber cellular-energy bars rise above the mitochondria after glucose breakdown is observed.',
   chloroplasts:
-    'Game cue: bands highlight the chloroplasts after their photosynthesis function is observed.',
+    'Game cue: square sunlight markers illuminate the chloroplast bands after photosynthesis is observed.',
   centralVacuole:
-    'Game cue: water-level rings and the firm plant indicator show water storage and high turgor.',
+    'Game cue: water-level bands and outward support braces show water storage and high turgor.',
 };

@@ -6,7 +6,11 @@ const root = createRoot(document.getElementById('root')!);
 const proofRequested = new URLSearchParams(window.location.search).get('proof');
 
 async function bootstrap() {
-  if (proofRequested === 'voxel' || proofRequested === 'boundary') {
+  if (
+    proofRequested === 'voxel' ||
+    proofRequested === 'boundary' ||
+    proofRequested === 'structures'
+  ) {
     if (!import.meta.env.DEV) {
       root.render(
         <main className="screen">
@@ -30,6 +34,15 @@ async function bootstrap() {
       root.render(
         <StrictMode>
           <BoundarySliceApp />
+        </StrictMode>,
+      );
+      return;
+    }
+    if (proofRequested === 'structures') {
+      const { default: StructureSliceApp } = await import('./proof/StructureSliceApp');
+      root.render(
+        <StrictMode>
+          <StructureSliceApp />
         </StrictMode>,
       );
       return;

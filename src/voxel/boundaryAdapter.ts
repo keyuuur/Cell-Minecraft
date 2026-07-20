@@ -127,6 +127,25 @@ export function createBoundaryVoxelState(): BoundaryVoxelStateV1 {
   };
 }
 
+/**
+ * Returns the verified Phase 3 checkpoint used as the starting boundary for
+ * later, independently testable voxel slices. This is a prerequisite fixture,
+ * not a shortcut inside the graded classroom mission.
+ */
+export function createCompletedBoundaryVoxelState(): BoundaryVoxelStateV1 {
+  let state = createBoundaryVoxelState();
+  for (const sector of BOUNDARY_SECTORS) {
+    state = placeBoundaryModule(state, 'cellWall', sector.id)!;
+  }
+  state = recordBoundaryFunction(state, 'cellWall')!;
+  for (const sector of BOUNDARY_SECTORS) {
+    state = placeBoundaryModule(state, 'cellMembrane', sector.id)!;
+  }
+  state = recordBoundaryFunction(state, 'cellMembrane')!;
+  state = establishBoundaryCytoplasm(state)!;
+  return recordBoundaryFunction(state, 'cytoplasm')!;
+}
+
 export function cloneBoundaryVoxelState(state: BoundaryVoxelStateV1): BoundaryVoxelStateV1 {
   return {
     ...state,

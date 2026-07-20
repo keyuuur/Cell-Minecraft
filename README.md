@@ -48,6 +48,24 @@ slice does not collect identity, write saves, submit results, or expose advanced
 organelles. Production builds show the same safe unavailable page used by the
 foundation proof.
 
+### Development-only complete structure slice
+
+Phase 4 adds a third isolated route:
+
+```text
+http://localhost:5173/?proof=structures
+```
+
+It begins from the verified Phase 3 boundary checkpoint, then installs the
+nucleus, ribosomes, mitochondria, chloroplasts, and large central vacuole as
+original voxel prefabs. Students walk to labeled model depots, collect modules,
+place them in broad valid zones, and inspect each installed prefab to reveal a
+distinct in-world Unit 1 function cue. The correction path requires a visible
+remove, physical pickup, rebuild, and reinspection. A separate versioned pure
+adapter projects the complete eight-structure state to the existing rubric and
+caps this pre-drought checkpoint at 80/100. The route remains ungraded,
+in-memory only, and unavailable in production.
+
 ## Quality checks
 
 ```powershell
