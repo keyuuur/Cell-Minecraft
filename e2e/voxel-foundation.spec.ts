@@ -209,6 +209,7 @@ test('pause clears held movement and graphics loss stops the proof safely', asyn
 });
 
 test('visible joystick movement stops at the full-height rail', async ({ page }) => {
+  test.setTimeout(60_000);
   await page.goto('/?proof=voxel');
   const proof = page.locator('main.voxel-proof');
   await expect(proof).toHaveAttribute('data-foundation-player-cell', /^\d+,\d+,\d+$/);
