@@ -1,0 +1,558 @@
+:root {
+  --proof-ink: #17221b;
+  --proof-cream: #fff6ce;
+  --proof-lime: #b7e45a;
+  --proof-amber: #f0b354;
+  --proof-danger: #ff6b52;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  min-height: 100dvh;
+  background: #75c7e9;
+}
+
+button {
+  font: inherit;
+}
+
+.voxel-proof {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  color: var(--proof-cream);
+  background: #75c7e9;
+  font-family: ui-monospace, 'Cascadia Mono', 'Courier New', monospace;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  user-select: none;
+  touch-action: none;
+}
+
+.voxel-proof-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.voxel-proof button {
+  min-width: 56px;
+  min-height: 56px;
+  border: 3px solid #fff5c8;
+  border-radius: 4px;
+  color: #fffceb;
+  background: linear-gradient(#3c5b49, #263c31);
+  box-shadow:
+    0 5px 0 #14221a,
+    inset 0 0 0 2px rgb(0 0 0 / 28%);
+  text-shadow: 2px 2px 0 #142218;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.voxel-proof button:focus-visible {
+  outline: 4px solid #fff36b;
+  outline-offset: 3px;
+}
+
+.voxel-proof button:active:not(:disabled),
+.voxel-proof button.is-selected {
+  transform: translateY(3px);
+  border-color: #fff36b;
+  background: linear-gradient(#7b9d45, #49692e);
+  box-shadow:
+    0 2px 0 #14221a,
+    inset 0 0 0 3px rgb(255 255 255 / 22%);
+}
+
+.voxel-proof-objective {
+  position: absolute;
+  z-index: 3;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  width: min(430px, calc(100vw - 310px));
+  padding: 13px 16px;
+  border: 4px solid #fff2b0;
+  border-radius: 4px;
+  color: #fffbe2;
+  background:
+    linear-gradient(135deg, rgb(13 30 22 / 94%), rgb(31 63 43 / 92%)),
+    repeating-linear-gradient(90deg, transparent 0 14px, rgb(255 255 255 / 5%) 14px 16px);
+  box-shadow: 7px 7px 0 rgb(18 31 24 / 75%);
+  text-shadow: 2px 2px 0 #17231a;
+}
+
+.voxel-proof-objective h1 {
+  max-width: 38ch;
+  margin: 3px 0 7px;
+  font-size: clamp(1rem, 1.8vw, 1.28rem);
+  line-height: 1.18;
+}
+
+.voxel-proof-objective p {
+  margin: 4px 0;
+  font-size: clamp(0.72rem, 1.1vw, 0.84rem);
+  line-height: 1.28;
+}
+
+.voxel-proof-kicker {
+  color: #dcff78;
+  letter-spacing: 0.07em;
+}
+
+.voxel-proof-model-note {
+  color: #ffe4a3;
+  font-weight: 700;
+}
+
+.voxel-proof-utilities {
+  position: absolute;
+  z-index: 5;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  display: grid;
+  grid-template-columns: repeat(2, minmax(112px, auto));
+  gap: 9px;
+}
+
+.voxel-proof-utilities button {
+  padding: 8px 12px;
+  font-size: 0.76rem;
+}
+
+.voxel-proof-fps {
+  grid-column: 1 / -1;
+  justify-self: end;
+  padding: 5px 8px;
+  border: 2px solid rgb(255 255 255 / 60%);
+  color: #f6ffd4;
+  background: rgb(17 35 25 / 82%);
+  font-size: 0.7rem;
+}
+
+.voxel-proof-crosshair {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(2px 2px 0 #142018);
+  pointer-events: none;
+}
+
+.voxel-proof-crosshair span {
+  position: absolute;
+  top: 13px;
+  left: 3px;
+  width: 24px;
+  height: 4px;
+  background: #fff7c2;
+}
+
+.voxel-proof-crosshair span:last-child {
+  transform: rotate(90deg);
+}
+
+.voxel-proof-target-label {
+  position: absolute;
+  z-index: 4;
+  top: calc(50% + 28px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 10px;
+  border: 2px solid #eaff88;
+  color: #f3ffd2;
+  background: rgb(21 43 29 / 88%);
+  box-shadow: 3px 3px 0 rgb(12 25 17 / 72%);
+  font-size: clamp(0.66rem, 1.05vw, 0.78rem);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.voxel-proof-mining {
+  position: absolute;
+  z-index: 5;
+  top: calc(50% + 64px);
+  left: 50%;
+  width: min(310px, 42vw);
+  transform: translateX(-50%);
+  padding: 7px 9px;
+  border: 3px solid #fff2b0;
+  color: #fff8d3;
+  background: rgb(22 36 27 / 92%);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.voxel-proof-mining > div {
+  height: 13px;
+  margin-top: 5px;
+  border: 2px solid #17231a;
+  background: repeating-linear-gradient(135deg, #372d21 0 8px, #483928 8px 16px);
+}
+
+.voxel-proof-mining i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, #f0b354 0 10px, #ffd47d 10px 18px);
+}
+
+.voxel-proof-feedback {
+  position: absolute;
+  z-index: 4;
+  right: 50%;
+  bottom: 90px;
+  width: min(470px, 46vw);
+  margin: 0;
+  padding: 8px 12px;
+  transform: translateX(50%);
+  border: 3px solid #e9efbd;
+  color: #fffbe1;
+  background: rgb(18 37 27 / 90%);
+  box-shadow: 4px 4px 0 rgb(13 25 18 / 70%);
+  font-size: clamp(0.68rem, 1.2vw, 0.82rem);
+  text-align: center;
+  pointer-events: none;
+}
+
+.voxel-proof-feedback.is-invalid {
+  border-color: #ffd0c7;
+  outline: 4px dashed var(--proof-danger);
+  color: #fff7e7;
+  background: repeating-linear-gradient(
+    135deg,
+    rgb(116 30 22 / 95%) 0 12px,
+    rgb(82 24 19 / 95%) 12px 24px
+  );
+}
+
+.voxel-proof-feedback.is-invalid::before {
+  content: '× ';
+  color: #fff36b;
+  font-size: 1.15em;
+}
+
+.voxel-proof-joystick-wrap {
+  position: absolute;
+  z-index: 5;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: max(20px, env(safe-area-inset-left));
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  color: #fff6ce;
+  font-size: 0.72rem;
+  text-shadow: 2px 2px 0 #17231a;
+}
+
+.voxel-proof-joystick {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  border: 4px solid #fff2b0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgb(25 48 35 / 68%) 0 43%, rgb(14 28 20 / 86%) 44%),
+    repeating-linear-gradient(45deg, transparent 0 10px, rgb(255 255 255 / 8%) 10px 14px);
+  box-shadow:
+    6px 6px 0 rgb(14 27 20 / 64%),
+    inset 0 0 0 5px rgb(0 0 0 / 22%);
+  touch-action: none;
+}
+
+.voxel-proof-joystick[aria-disabled='true'] {
+  opacity: 0.5;
+}
+
+.voxel-proof-joystick-arrows {
+  position: absolute;
+  inset: 17px;
+  color: rgb(255 246 206 / 62%);
+  font-size: 1.25rem;
+  line-height: 1.65;
+  text-align: center;
+  pointer-events: none;
+}
+
+.voxel-proof-joystick-thumb {
+  position: absolute;
+  top: calc(50% - 28px);
+  left: calc(50% - 28px);
+  width: 56px;
+  height: 56px;
+  border: 3px solid #fff2b0;
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, #7aa94e, #3c6a3b),
+    repeating-linear-gradient(45deg, transparent 0 7px, rgb(255 255 255 / 12%) 7px 10px);
+  box-shadow:
+    3px 3px 0 #15241a,
+    inset 0 0 0 3px rgb(255 255 255 / 16%);
+  pointer-events: none;
+}
+
+.voxel-proof-actions {
+  position: absolute;
+  z-index: 5;
+  right: max(20px, env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 96px 96px;
+  gap: 10px;
+}
+
+.voxel-proof-action {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  padding: 7px;
+  font-size: 0.72rem;
+}
+
+.voxel-proof-action span {
+  font-size: 1.5rem;
+}
+
+.voxel-proof-mine {
+  border-color: #ffd897 !important;
+  background: linear-gradient(#81562f, #56371f) !important;
+}
+
+.voxel-proof-place {
+  border-color: #dcff8a !important;
+  background: linear-gradient(#567d3f, #34512f) !important;
+}
+
+.voxel-proof-hotbar {
+  position: absolute;
+  z-index: 5;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 50%;
+  display: grid;
+  grid-template-columns: repeat(9, 56px);
+  gap: 5px;
+  transform: translateX(-50%);
+  padding: 6px;
+  border: 3px solid rgb(255 244 197 / 78%);
+  background: rgb(19 34 25 / 72%);
+  box-shadow: 5px 5px 0 rgb(13 24 18 / 65%);
+}
+
+.voxel-proof-hotbar button {
+  position: relative;
+  min-width: 56px;
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
+  border-width: 2px;
+  border-color: #c5c9a8;
+  background:
+    linear-gradient(rgb(50 62 48 / 96%), rgb(32 41 32 / 96%)),
+    repeating-linear-gradient(45deg, transparent 0 7px, rgb(255 255 255 / 9%) 7px 10px);
+  box-shadow:
+    0 3px 0 #121c15,
+    inset 0 0 0 2px rgb(0 0 0 / 28%);
+}
+
+.voxel-proof-hotbar button:disabled {
+  color: #7d877e;
+  opacity: 0.72;
+  background: repeating-linear-gradient(135deg, #2f3730 0 7px, #222923 7px 14px);
+  cursor: default;
+}
+
+.voxel-proof-hotbar button small {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 0.58rem;
+}
+
+.voxel-proof-hotbar button strong {
+  font-size: 1.65rem;
+}
+
+.voxel-proof-hotbar button b {
+  position: absolute;
+  right: 3px;
+  bottom: 1px;
+  min-width: 17px;
+  padding: 1px 3px;
+  border: 1px solid #fff3a5;
+  color: #fffbd7;
+  background: #17231a;
+  font-size: 0.7rem;
+}
+
+.voxel-proof-controls {
+  position: absolute;
+  z-index: 3;
+  bottom: 84px;
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  color: rgb(255 247 208 / 92%);
+  font-size: clamp(0.56rem, 0.9vw, 0.68rem);
+  text-shadow: 2px 2px 0 #17231a;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.voxel-proof-complete {
+  position: absolute;
+  z-index: 6;
+  top: 50%;
+  left: 50%;
+  width: min(520px, calc(100vw - 340px));
+  padding: 22px;
+  transform: translate(-50%, -54%);
+  border: 6px double #efff91;
+  color: #f8ffd7;
+  background:
+    linear-gradient(rgb(29 70 40 / 95%), rgb(17 44 27 / 96%)),
+    repeating-linear-gradient(90deg, transparent 0 18px, rgb(255 255 255 / 6%) 18px 21px);
+  box-shadow: 10px 10px 0 rgb(11 24 16 / 70%);
+  text-align: center;
+}
+
+.voxel-proof-complete p {
+  margin: 5px 0;
+  font-size: 0.8rem;
+}
+
+.voxel-proof-complete h2 {
+  margin: 8px 0;
+  color: #efff91;
+  font-size: clamp(1.2rem, 2.4vw, 1.8rem);
+}
+
+.voxel-proof-modal {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(11 20 15 / 78%);
+}
+
+.voxel-proof-modal > div {
+  width: min(470px, 92vw);
+  padding: 28px;
+  border: 6px double #fff1a9;
+  color: #fff9d7;
+  background:
+    linear-gradient(#304b39, #1d3126),
+    repeating-linear-gradient(45deg, transparent 0 12px, rgb(255 255 255 / 5%) 12px 15px);
+  box-shadow: 10px 10px 0 #111b15;
+  text-align: center;
+}
+
+.voxel-proof-modal h2 {
+  margin: 8px 0;
+  font-size: 1.65rem;
+}
+
+.voxel-proof-modal button {
+  min-width: 210px;
+  margin-top: 12px;
+}
+
+.voxel-proof-modal.is-error > div {
+  border-color: #ffb09f;
+  background: linear-gradient(#6e3027, #3e211d);
+}
+
+@media (max-height: 700px) {
+  .voxel-proof-objective {
+    top: 10px;
+    padding: 9px 12px;
+  }
+
+  .voxel-proof-model-note {
+    display: block;
+    margin-top: 3px;
+    font-size: 0.62rem;
+    line-height: 1.12;
+  }
+
+  .voxel-proof-joystick {
+    width: 116px;
+    height: 116px;
+  }
+
+  .voxel-proof-joystick-thumb {
+    top: calc(50% - 26px);
+    left: calc(50% - 26px);
+    width: 52px;
+    height: 52px;
+  }
+
+  .voxel-proof-joystick-wrap,
+  .voxel-proof-actions {
+    bottom: 12px;
+  }
+
+  .voxel-proof-feedback {
+    bottom: 80px;
+  }
+
+  .voxel-proof-controls {
+    bottom: 78px;
+  }
+}
+
+@media (max-width: 900px) {
+  .voxel-proof-objective {
+    width: min(390px, calc(100vw - 276px));
+  }
+
+  .voxel-proof-utilities {
+    grid-template-columns: repeat(2, minmax(100px, auto));
+  }
+
+  .voxel-proof-hotbar {
+    grid-template-columns: repeat(9, 52px);
+    gap: 3px;
+  }
+
+  .voxel-proof-hotbar button {
+    min-width: 52px;
+    width: 52px;
+  }
+
+  .voxel-proof-actions {
+    grid-template-columns: 92px 92px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voxel-proof *,
+  .voxel-proof *::before,
+  .voxel-proof *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -51,15 +51,18 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 
 - Repository: `https://github.com/keyuuur/Cell-Minecraft`
 - Active local branch: `codex/build-a-living-cell`
-- Voxel-rebuild strategy baseline: local HEAD and upstream both matched `494ec1387ae58bbc6f4d314cfe0bd1e0d8fc2a7a` (`docs: close UI rollout`) before Phase 0. User-owned edits to `AGENTS.md` and `KEYUR_WORKFLOW.md` remain unstaged and excluded.
-- Phase 0 strategy-reset checkpoint: `132c73ca83be94e0927bd827a173d1f63f4019bc` (`docs: start voxel gameplay rebuild`). No Phase 1 application or proof-route code is included in this checkpoint.
+- Voxel-rebuild strategy baseline: local HEAD and upstream both matched `494ec1387ae58bbc6f4d314cfe0bd1e0d8fc2a7a` (`docs: close UI rollout`) before Phase 0.
+- Phase 0 strategy-reset start: `132c73ca83be94e0927bd827a173d1f63f4019bc` (`docs: start voxel gameplay rebuild`).
+- Phase 0 final planning checkpoint: `7bcc7cf` (`docs: checkpoint voxel rebuild phase 0`).
+- Phase 1 working base: local HEAD and upstream both matched `f10a9473c16f0e6c32f47f289ff7ec9303267f4b` (`Sync local changes to GitHub`). That earlier authorized checkpoint includes `AGENTS.md` and `KEYUR_WORKFLOW.md`; Phase 1 did not modify either file.
+- Phase 1 isolated-proof implementation checkpoint: pending the commit created from this passed gate. The follow-up handoff checkpoint must record its exact SHA before closeout.
 - Verified base commit: `e968008`
 - Verified implementation commit: `e69f8d9` (`Build playable Unit 1 cell mission`).
 - Verified release-test checkpoint: `15fe51f` (`Add protected preview verification`).
 - Verified live-backend runtime fix: `a1f01d8` (`fix: load Vercel submission validation at runtime`).
-- Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. The live-backend runtime fix was pushed on 2026-07-14. Unrelated local edits to `AGENTS.md` and `KEYUR_WORKFLOW.md` remain outside project commits.
+- Upstream: `origin/codex/build-a-living-cell` exists and tracks the local branch. Production remains unpromoted.
 - Five-run UI rollout upstream checkpoint: `f5d6446` (`docs: verify counted Run 3 report`). It follows Visual Pass 2 implementation/evidence commit `505fba0`, Run 2 delivery checkpoint `60d42fb`, and retains application baseline `43ebed6`.
-- Counted Run 3 used app and evidence SHA `505fba00236dad6d3303d0a50d3d73fd89c84eb1`. Its verified report checkpoint is pushed, and Email 3 was sent once to the authenticated school-domain self-address with the verified PDF attached. The user-owned `AGENTS.md` and `KEYUR_WORKFLOW.md` edits remain unstaged and excluded.
+- Counted Run 3 used app and evidence SHA `505fba00236dad6d3303d0a50d3d73fd89c84eb1`. Its verified report checkpoint is pushed, and Email 3 was sent once to the authenticated school-domain self-address with the verified PDF attached.
 - Visual Pass 2 accessibility-correction commit: `01dd4463af0d1835d3301cb29f1a472a398cb8c7` (`fix: validate accessible touch HUD`). Counted Run 4 used this exact committed app/evidence SHA. Reporting checkpoint `9a25e58` (`docs: verify counted Run 4 report`) is pushed, and Email 4 was sent once to the authenticated school-domain self-address with the verified PDF attached.
 - Run 4 delivery checkpoint: `1adb34a79f55665e74d8902f6904492adec85412` (`docs: record Run 4 report delivery`) is pushed and is the verified upstream base for Visual Pass 3.
 - Visual Pass 3 UI candidate commit: `7257ad13abe194fcf2a875fbb9b2bd5fbbbf7bee` (`feat: complete visual pass 3 candidate`). Final protected-Preview evidence-harness commit: `1e0b68b4b93eb557588b1184b122f8800c82653e` (`test: preserve raw preview test flag`), which contains the unchanged verified UI candidate plus the complete privacy, freshness, idempotency, Preview-only safety, accurate target-labeling, bounded visible-control navigation, exact raw-boolean capture, and server-forced Preview test-classification sequence. Use `1e0b68b4b93eb557588b1184b122f8800c82653e` as the evidence SHA for counted Run 5. A later handoff-only checkpoint may be the Preview's tested app SHA without changing this evidence SHA.
@@ -82,6 +85,19 @@ Record the handoff-checkpoint commit, upstream branch, and deployment URL after 
 - **Phase 4 — Complete Unit 1 mission:** all eight approved structures, full progression, eight visible function-evidence events, hydrated baseline, separated drought observation/diagnosis/recovery, accessibility settings, and original low-poly procedural visuals.
 - **Phase 5 — Classroom layer:** identification, periods 1–7, active timer, unlimited fresh attempts, checkpoint grade, confirmed early submission, immutable results, and ungraded practice.
 - **Phase 6 — Backend and resilience, local code:** validated submission contract, atomic save/queue preparation, reload-safe retry, idempotent Apps Script writes, append-only raw results, recoverable best-result reconciliation, formula-prefix neutralization, and test-row exclusion.
+
+### Voxel rebuild Phase 1 verified 2026-07-19
+
+- The isolated `/?proof=voxel` development route branches before the graded `App` module loads. It uses React-local and pure TypeScript in-memory state only; it creates no IndexedDB database, browser storage, cookie, student identity, timer, score, submission queue, or `/api` request.
+- The route presents a bright bounded voxel yard, block path, plant-cell construction frame, center crosshair, original first-person builder pick, real five-unit ray targeting, visible mining progress, physical pickup, nine-slot hotbar, target-only placement, removal, recollection, and repair.
+- Production excludes the proof JS/CSS bundle. A production build request to `?proof=voxel` renders the safe unavailable screen with no canvas; the ordinary graded startup screen remains unchanged.
+- Original-resolution evidence under ignored `output/playwright/voxel-proof-2026-07-19/` contains 15 final PNGs plus browser traces. It covers opening, mining, drop, collection, invalid and valid placement, Pause, installed wall, removal, recollection, repair, 1024 × 680 touch-only completion, safe WebGL loss, and held-joystick Pause recovery. These are voxel-rebuild proof artifacts, not a sixth counted rollout run.
+- The 1024 × 768 keyboard + drag-look route and 1024 × 680 touch-only joystick route both completed through visible controls. Compact layout had zero document overflow and no control smaller than 56 × 56.
+- Pause/resume clears keyboard, mining, pointer, and joystick state at both boundaries. A pointer held on the joystick before Pause cannot restart movement after Resume. WebGL context loss permanently stops gameplay input until reload.
+- `npm run check` passed formatting, ESLint, TypeScript, 47 Vitest/component/API tests, and the production build.
+- The existing graded mission regression suite discovered 32 cases: 28 passed across desktop Chromium and emulated iPad landscape, while four explicitly configured live/visual-rollout cases were skipped. No graded mission, persistence, backend, or deployment source was changed.
+- Independent Visual/Game Loop, Technical/QA, Biology/Classroom Fit, Student UX, and Skeptical re-gates returned **GO with no mandatory finding** after correcting the compact disclaimer, exact Unit 1 wall wording, held-item inventory sync, paused/stopped keyboard handling, and held-joystick recovery.
+- This is browser emulation, not physical school-iPad evidence. No Preview or Production deployment was created or promoted in Phase 1.
 
 ### Verified 2026-07-13
 
@@ -234,19 +250,19 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ## 7. Current active phase and exact remaining work
 
-Active phase: **Approved voxel-adventure rebuild — Phase 0 complete; Phase 1 isolated gameplay proof not started**.
+Active phase: **Approved voxel-adventure rebuild — Phase 1 isolated gameplay proof complete; Phase 2 voxel foundation not started**.
 
 The previous Five-Run, Three-Pass rollout is complete and none of its runs or six emails should be repeated. Its Biology, scoring, persistence, backend, accessibility, and classroom-flow evidence remains historical functional evidence.
 
-Phase 0 updated the durable strategy, superseded presentation decisions, acceptance boundaries, risks, swarm conclusions, phase sequence, and restart instructions. The coordinator intentionally stopped before Phase 1 so Codex could be updated and restarted from a clean checkpoint.
+Phase 1 passed its code, production-isolation, real-control browser, original-resolution visual, Unit 1 Biology, classroom-fit, touch-recovery, graphics-loss, and independent swarm gates. The graded mission and backend remain preserved.
 
-The next bounded work is:
+The next bounded work, when resumed, is Phase 2:
 
-1. Preserve the existing graded mission and backend while adding a separate `/?proof=voxel` route that is unavailable in Production.
-2. Prove first-person walking, drag-look, crosshair targeting, an original visible builder pick, mining progress, block break, physical drop, collection, nine-slot hotbar feedback, valid wall-anchor placement, removal, collection, and replacement.
-3. Use only fictional model-building supplies and state clearly that real cells do not mine, craft, or install organelles.
-4. Capture a new original-resolution voxel-rebuild evidence series. Do not count it as a sixth run in the completed rollout.
-5. Keep Production unpromoted. The full mission rebuild begins only after this proof passes its code, browser, visual, Biology, classroom, and skeptical gates.
+1. Extract pure world, block, inventory, pickup, and target-placement models from the disposable proof without coupling them to the graded store.
+2. Add a tested voxel grid raycast, collision and auto-step, target-face placement, pooled pickups, and regional dirty-mesh updates without building a general chunk engine.
+3. Design the future save-schema adapter before any proof state enters IndexedDB.
+4. Preserve the Phase 1 first-person presentation, Unit 1 metaphor safeguards, input-reset behavior, 56 px controls, production isolation, and original assets.
+5. Keep Production unpromoted. Phase 2 must pass its own code, browser, visual, Biology, classroom, and skeptical gates before the boundary vertical slice begins.
 
 ## 8. Known risks, failures, and blockers
 
@@ -258,8 +274,8 @@ The next bounded work is:
 - **Payload risk:** Babylon is isolated in a lazy bundle but remains the largest download. Low mode and real-device evidence are mandatory before release.
 - **Rate limiting:** Apps Script rate limiting is best effort, not an authentication boundary. Assignment tokens remain routing data rather than secrets.
 - **Shared-iPad privacy risk:** a pending delivery necessarily preserves the earlier attempt payload, including its student identity, until a receipt arrives. Before classroom use, verify that starting a new student session cannot display or attach that prior identity while background delivery continues.
-- **Voxel-proof isolation risk:** the proof must not mutate the current mission store, save envelope, submission payload, timer, identity flow, or backend. It is an in-memory interaction and visual-direction gate only.
-- **Visual-direction risk:** adding cubes or a decorative pickaxe to the existing laboratory is a failed proof. The opening must read as a bright first-person block-building game before instructions are read.
+- **Voxel-proof isolation constraint:** Phase 1 verified no mission store, save envelope, payload, timer, identity, IndexedDB, or backend mutation. Phase 2 must preserve that boundary until an explicit, versioned integration adapter is tested.
+- **Visual-direction constraint:** Phase 1 passed the bright first-person block-building gate. Later phases must preserve it rather than collapsing back into the superseded dark laboratory or a decorative-pickaxe overlay.
 - **Biology-metaphor risk:** mining is limited to clearly labeled model-building supplies. Organelles are not ores, cytoplasm is not a mineable solid, and no recipe represents real cell construction.
 - **Asset gate:** all block textures, tool geometry, UI, sounds, and future prefabs must be original. Optional audio and optimized assets remain constrained by physical-device measurements.
 
@@ -300,10 +316,11 @@ Final re-gate results:
 - **2026-07-16 counted Run 5 checkpoint:** Playtest/QA, Deployment/Ops, Biology/Learning Content, Classroom Fit, Game Loop, Student UX/Visual Direction, and Skeptical lanes approved the exact protected-Preview manifest and all 18 original PNGs. The coordinator accepted the run at app SHA `f64fb5301d16f2275d4fc35297d1e4ed2ed3d9f5` with evidence SHA `1e0b68b4b93eb557588b1184b122f8800c82653e`: one accepted visible submission, exact-payload original-receipt idempotency, three raw test rows, no fourth duplicate row, zero best-result rows, zero errors, and zero WebGL loss. All lanes explicitly retained physical-device and classroom gates.
 - **2026-07-16 final rollout audit:** Playtest/QA, Classroom Fit, Deployment/Ops, Skeptical, Biology/Learning Content, Student UX/HUD, Visual Direction, and Game Loop lanes independently reviewed the completed run set, original-resolution baseline/final evidence, reports, automated tests, deployment/backend posture, and remaining release gates. QA's only initial P2 was a stale classroom-release checklist description of test classification; the coordinator corrected it to document the production-shaped client plus Preview proxy-forced `isTest=true` behavior and to leave unproved live failure cases open. The QA re-gate and every other lane returned **GO with no P0-P2 finding**. No fourth visual pass is authorized or needed from emulated evidence; physical-device and student evidence remain external gates.
 - **2026-07-19 voxel-rebuild planning checkpoint:** Visual/Game Loop, Gameplay/Frontend and iPad QA, Biology/Classroom Fit, Student UX, and Skeptical lanes independently agreed that the laboratory cannot be cosmetically polished into the approved target. The coordinator locked a separate proof route so the verified mission remains intact. The proof requires real crosshair targeting, a functional original builder pick, visible mining progress, a physical drop, collection, compact hotbar feedback, target-based placement, and a remove/collect/replace repair loop. Cosmetic pickaxe overlays, proximity collection, player-foot placement, copied Minecraft assets, organelle ores, chunk streaming, crafting, combat, and block grinding are rejection cases.
+- **2026-07-19 voxel Phase 1 checkpoint:** Visual/Game Loop, Technical/QA, Biology/Classroom Fit, Student UX, and Skeptical lanes independently inspected current source and all original PNG evidence. Initial mandatory findings identified a hidden compact-height fictional-model disclaimer, wall wording that blurred membrane and wall functions, a held item after inventory reached zero, paused/stopped keyboard capture, and a held joystick surviving Pause. The coordinator corrected each issue and reran the complete keyboard/drag-look and touch-only routes plus targeted Pause and context-loss regressions. Every final lane returned **GO with no mandatory finding**. The large diagonal anchor wireframe remains a nonblocking Phase 2 refinement; original-resolution inspection, not composite-viewer artifacts, remains authoritative.
 
 ## 10. Future phase sequence and acceptance gates
 
-1. **Phase 1 — isolated voxel proof:** bright bounded yard, real first-person controls, target outline, original visible pick, mine/drop/collect/hotbar/place/remove/replace loop, original-resolution evidence, and swarm re-gate.
+1. **Phase 1 — isolated voxel proof (complete locally):** bright bounded yard, real first-person controls, target outline, original visible pick, mine/drop/collect/hotbar/place/remove/replace loop, original-resolution evidence, and swarm re-gate.
 2. **Phase 2 — voxel foundation:** pure world/block/inventory models, tested grid raycast, collision and auto-step, regional dirty-mesh renderer, target-face placement, pooled pickups, and save-schema planning without a general chunk engine.
 3. **Phase 3 — boundary vertical slice:** voxel plant-cell foundation, six outer wall modules, six inner membrane modules, cytoplasm fill, invalid correction, scoring adapter, and real-control browser evidence.
 4. **Phase 4 — complete structure mission:** original voxel prefabs for nucleus, ribosomes, mitochondria, chloroplasts, and central vacuole with in-world Unit 1 function evidence.
@@ -330,7 +347,7 @@ Failed gates trigger correction and retest. No user approval is needed between t
 1. Read current user instructions, the nearest `AGENTS.md`, `KEYUR_WORKFLOW.md`, and this file completely.
 2. Verify `git status`, current branch, HEAD/upstream, package lock, tests, GitHub Actions, deployment URLs, and backend state. Never trust stale prose over live evidence.
 3. Read the archived planning handoff only when a historical decision is missing here.
-4. Resume the voxel-rebuild phase recorded in section 7. The Five-Run, Three-Pass rollout remains complete historical functional evidence at 5/5 counted runs, 3/3 visual passes, and 6/6 verified emails; do not rerun, recount, or resend it. The active presentation target is now the bounded first-person voxel experience. Use read → plan → implement → test.
+4. Resume with voxel-rebuild Phase 2 as recorded in section 7. Do not rebuild or recount the passed Phase 1 proof unless its source changes. The Five-Run, Three-Pass rollout remains complete historical functional evidence at 5/5 counted runs, 3/3 visual passes, and 6/6 verified emails; do not rerun, recount, or resend it. The active presentation target is the bounded first-person voxel experience. Use read → plan → implement → test.
 5. In swarm mode, keep one implementation owner and independent read-only reviewers; route disagreement through the coordinator.
 6. After a passed gate, update sections 5–11 before commit/push. Rewrite current state and retain replaced decisions only in the short dated log.
 7. Never record credentials, OAuth details, student submissions, private names, or machine-local configuration.
