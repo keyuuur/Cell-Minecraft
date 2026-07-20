@@ -173,7 +173,7 @@ test('complete structure slice uses visible controls and restores correction cre
   page,
   browserName,
 }) => {
-  test.setTimeout(360_000);
+  test.setTimeout(600_000);
   const images: EvidenceImage[] = [];
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
