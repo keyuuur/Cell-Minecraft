@@ -109,11 +109,6 @@ describe('complete structure mission voxel adapter', () => {
     expect(placeStructureMissionModule(state, 'nucleus', { x: 12, y: 1, z: 12 })).toBeNull();
     expect(state.placements.nucleus).toBeUndefined();
     expect(structureMissionCheckpoint(state).score.total).toBe(before);
-
-    state = placeStructureMissionModule(state, 'nucleus', positions.nucleus)!;
-    state = collectStructureModule(state, 'ribosomes')!;
-    expect(placeStructureMissionModule(state, 'ribosomes', positions.nucleus)).toBeNull();
-    expect(state.placements.ribosomes).toBeUndefined();
   });
 
   it('drops credit on removal and restores all credit only after reinspection', () => {

@@ -142,22 +142,7 @@ export function assessStructureMissionPlacement(
       zoneLabel: id === 'centralVacuole' ? 'CENTRAL VACUOLE ZONE' : 'BROAD INTERIOR ZONE',
     };
   }
-  const placement = assessPlacement(mission, id, position);
-  if (!placement.allowed) return placement;
-  for (const [otherId, otherPosition] of Object.entries(state.placements)) {
-    if (!otherPosition || otherId === id) continue;
-    const minimumSeparation = id === 'centralVacuole' || otherId === 'centralVacuole' ? 3.8 : 2.5;
-    if (
-      Math.hypot(position.x - otherPosition.x, position.z - otherPosition.z) < minimumSeparation
-    ) {
-      return {
-        allowed: false,
-        reason: 'Keep a clear path between the large voxel prefabs.',
-        zoneLabel: placement.zoneLabel,
-      };
-    }
-  }
-  return placement;
+  return assessPlacement(mission, id, position);
 }
 
 export function placeStructureMissionModule(
