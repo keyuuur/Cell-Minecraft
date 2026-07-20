@@ -422,11 +422,11 @@ button {
 .voxel-proof-complete {
   position: absolute;
   z-index: 6;
-  top: 50%;
-  left: 50%;
-  width: min(520px, calc(100vw - 340px));
-  padding: 22px;
-  transform: translate(-50%, -54%);
+  top: 46%;
+  right: 28px;
+  width: min(390px, calc(100vw - 620px));
+  padding: 18px;
+  transform: translateY(-50%);
   border: 6px double #efff91;
   color: #f8ffd7;
   background:

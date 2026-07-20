@@ -13,18 +13,22 @@ npm run dev
 
 Open the address printed by Vite. Add `?test=1` to expose labeled, ungraded test controls in a non-production build.
 
-### Development-only voxel proof
+### Development-only voxel foundation check
 
-Phase 1 includes an isolated first-person interaction proof at:
+The voxel rebuild includes an isolated first-person foundation check at:
 
 ```text
 http://localhost:5173/?proof=voxel
 ```
 
-The proof is ungraded, keeps progress in memory only, collects no identity, and
+The check is ungraded, keeps progress in memory only, collects no identity, and
 does not load the mission store, IndexedDB saves, submission queue, or backend.
-It is available only from the Vite development server. Production builds show a
-safe “proof unavailable” page instead.
+Its fixed `24 × 12 × 24` world drives collision, auto-step, grid raycasting,
+target-face placement, pooled pickups, the nine-slot hotbar, and nine regional
+meshes. A versioned future runtime snapshot is validated in pure TypeScript but
+is not connected to IndexedDB. The route is available only from the Vite
+development server; production builds show a safe “proof unavailable” page
+instead.
 
 ## Quality checks
 

@@ -9,18 +9,19 @@ import {
 import { VoxelProofCanvas, type VoxelProofController } from './VoxelProofCanvas';
 import { initialProofState, proofPhase, type ProofPhase } from './proofState';
 import type { VoxelProofSnapshot } from './VoxelProofScene';
+import { inventoryCount } from '../voxel/HotbarInventory';
 import './voxelProof.css';
 
 const PHASE_OBJECTIVES: Record<ProofPhase, string> = {
-  'mine-supply': 'Aim at the striped Wall Module supply block. Hold Mine.',
-  'collect-supply': 'Walk over the dropped Wall Module to collect it.',
-  'select-wall': 'Select hotbar slot 2: Wall Module.',
-  'place-wall': 'Follow the path, aim at the outlined outer wall anchor, then Place.',
+  'mine-supplies': 'Auto-step over the striped curb. Mine all 3 Builder Block supplies.',
+  'collect-supplies': 'Walk over all 3 physical drops to collect them.',
+  'select-block': 'Select hotbar slot 2: Builder Block.',
+  'place-frame': 'Place blocks in the 3 bracketed cells using front, side, and top faces.',
   'select-tool': "Select hotbar slot 1: Builder's Pick.",
-  'remove-wall': 'Aim at the installed wall and hold Remove.',
-  'collect-repair': 'Walk over the dropped module to collect it again.',
-  'repair-wall': 'Select slot 2, aim at the anchor, and replace the wall.',
-  complete: 'Proof complete: you mined, collected, placed, removed, and repaired.',
+  'remove-block': 'Aim at any installed Builder Block and hold Remove.',
+  'collect-repair': 'Walk over the removed block to collect it again.',
+  'repair-frame': 'Select slot 2 and replace the missing bracketed block.',
+  complete: 'Yard repair complete. The three-face model frame is restored.',
 };
 
 const initialSnapshot: VoxelProofSnapshot = {
@@ -29,6 +30,20 @@ const initialSnapshot: VoxelProofSnapshot = {
   target: null,
   targetLabel: '',
   fps: 0,
+  diagnostics: {
+    world: '24x12x24',
+    regionMeshes: 0,
+    lastRebuiltRegions: [],
+    totalRegionRebuilds: 0,
+    targetCell: 'none',
+    targetFace: 'none',
+    adjacentCell: 'none',
+    playerCell: 'none',
+    autoSteps: 0,
+    pickups: { active: 0, available: 8, reused: 0, capacity: 8 },
+    storageWrites: 0,
+    apiRequests: 0,
+  },
 };
 
 interface JoystickProps {
@@ -151,13 +166,27 @@ export default function VoxelProofApp() {
   };
 
   const isInvalid = snapshot.state.feedback.startsWith('Invalid placement');
-  const actionLabel = snapshot.target === 'placed-wall' ? 'REMOVE' : 'MINE';
+  const actionLabel = snapshot.target === 'placed-block' ? 'REMOVE' : 'MINE';
+  const builderBlockCount = inventoryCount(snapshot.state.inventory, 'builder-block');
 
   return (
     <main
       className="voxel-proof"
       data-proof-phase={snapshot.phase}
       data-proof-target={snapshot.target ?? 'none'}
+      data-foundation-world={snapshot.diagnostics.world}
+      data-foundation-target-cell={snapshot.diagnostics.targetCell}
+      data-foundation-target-face={snapshot.diagnostics.targetFace}
+      data-foundation-adjacent-cell={snapshot.diagnostics.adjacentCell}
+      data-foundation-player-cell={snapshot.diagnostics.playerCell}
+      data-foundation-auto-steps={snapshot.diagnostics.autoSteps}
+      data-foundation-last-regions={snapshot.diagnostics.lastRebuiltRegions.join(',')}
+      data-foundation-region-meshes={snapshot.diagnostics.regionMeshes}
+      data-foundation-region-rebuilds={snapshot.diagnostics.totalRegionRebuilds}
+      data-foundation-pickups-active={snapshot.diagnostics.pickups.active}
+      data-foundation-pickups-reused={snapshot.diagnostics.pickups.reused}
+      data-foundation-storage-writes={snapshot.diagnostics.storageWrites}
+      data-foundation-api-requests={snapshot.diagnostics.apiRequests}
     >
       <VoxelProofCanvas
         onContextLost={handleContextLost}
@@ -166,9 +195,9 @@ export default function VoxelProofApp() {
       />
 
       <section className="voxel-proof-objective" aria-live="polite">
-        <p className="voxel-proof-kicker">VOXEL GAMEPLAY PROOF · UNGRADED</p>
+        <p className="voxel-proof-kicker">VOXEL FOUNDATION CHECK · UNGRADED</p>
         <h1>{PHASE_OBJECTIVES[snapshot.phase]}</h1>
-        <p>A plant cell&apos;s wall provides support.</p>
+        <p>Builder-yard practice for the model. A plant cell&apos;s wall provides support.</p>
         <p className="voxel-proof-model-note">
           Fictional model: real cells do not mine blocks, craft parts, or install organelles.
         </p>
@@ -246,8 +275,8 @@ export default function VoxelProofApp() {
       <nav className="voxel-proof-hotbar" aria-label="Builder hotbar">
         {Array.from({ length: 9 }, (_, index) => {
           const enabled = index < 2;
-          const selected = snapshot.state.selectedSlot === index;
-          const label = index === 0 ? "Builder's Pick" : index === 1 ? 'Wall Module' : 'Locked';
+          const selected = snapshot.state.inventory.selectedSlot === index;
+          const label = index === 0 ? "Builder's Pick" : index === 1 ? 'Builder Block' : 'Locked';
           return (
             <button
               type="button"
@@ -259,9 +288,7 @@ export default function VoxelProofApp() {
             >
               <small>{index + 1}</small>
               <strong aria-hidden="true">{index === 0 ? '⛏' : index === 1 ? '▦' : '×'}</strong>
-              {index === 1 && snapshot.state.inventoryCount > 0 ? (
-                <b>{snapshot.state.inventoryCount}</b>
-              ) : null}
+              {index === 1 && builderBlockCount > 0 ? <b>{builderBlockCount}</b> : null}
             </button>
           );
         })}
@@ -273,11 +300,11 @@ export default function VoxelProofApp() {
 
       {snapshot.phase === 'complete' ? (
         <section className="voxel-proof-complete" role="status">
-          <p>MODEL REPAIRED</p>
-          <h2>Voxel interaction loop complete</h2>
+          <p>YARD REPAIR COMPLETE</p>
+          <h2>Three-face repair complete</h2>
           <p>
-            Walking, targeting, mining, pickup, hotbar selection, placement, removal, and repair all
-            passed in memory.
+            You crossed the yard, collected the model blocks, built from three faces, and repaired
+            the frame.
           </p>
         </section>
       ) : null}

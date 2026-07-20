@@ -1,23 +1,31 @@
-export type ProofTarget = 'supply' | 'anchor' | 'placed-wall' | null;
+import {
+  addInventoryItem,
+  createHotbar,
+  inventoryCount,
+  removeInventoryItem,
+  selectHotbarSlot,
+  type HotbarSnapshot,
+} from '../voxel/HotbarInventory';
+
+export type ProofTarget = 'supply' | 'placement' | 'placed-block' | null;
 
 export type ProofPhase =
-  | 'mine-supply'
-  | 'collect-supply'
-  | 'select-wall'
-  | 'place-wall'
+  | 'mine-supplies'
+  | 'collect-supplies'
+  | 'select-block'
+  | 'place-frame'
   | 'select-tool'
-  | 'remove-wall'
+  | 'remove-block'
   | 'collect-repair'
-  | 'repair-wall'
+  | 'repair-frame'
   | 'complete';
 
 export interface ProofState {
-  supplyAvailable: boolean;
-  dropAvailable: boolean;
-  inventoryCount: number;
-  wallPlaced: boolean;
-  placementCount: number;
-  selectedSlot: number;
+  inventory: HotbarSnapshot;
+  suppliesMined: number;
+  pickupsCollected: number;
+  blocksPlaced: number;
+  repairStarted: boolean;
   miningProgress: number;
   miningTarget: ProofTarget;
   feedback: string;
@@ -25,50 +33,55 @@ export interface ProofState {
 
 export interface MiningTransition {
   state: ProofState;
-  event: 'none' | 'supply-broken' | 'wall-removed';
+  event: 'none' | 'supply-broken' | 'block-removed';
 }
 
 export interface PlacementTransition {
   state: ProofState;
-  event: 'none' | 'wall-placed' | 'wall-repaired';
+  event: 'none' | 'block-placed' | 'block-repaired';
 }
 
+export interface CollectionTransition {
+  state: ProofState;
+  accepted: boolean;
+}
+
+export const FOUNDATION_BLOCK_COUNT = 3;
+
 export const initialProofState: ProofState = {
-  supplyAvailable: true,
-  dropAvailable: false,
-  inventoryCount: 0,
-  wallPlaced: false,
-  placementCount: 0,
-  selectedSlot: 0,
+  inventory: createHotbar(),
+  suppliesMined: 0,
+  pickupsCollected: 0,
+  blocksPlaced: 0,
+  repairStarted: false,
   miningProgress: 0,
   miningTarget: null,
-  feedback: 'Aim at the Wall Module supply block and hold Mine.',
+  feedback: 'Aim at the striped Builder Block supplies and hold Mine.',
 };
 
 export function proofPhase(state: ProofState): ProofPhase {
-  if (state.wallPlaced && state.placementCount >= 2) return 'complete';
-  if (state.supplyAvailable) return 'mine-supply';
-  if (state.dropAvailable) {
-    return state.placementCount === 0 ? 'collect-supply' : 'collect-repair';
+  if (state.repairStarted && state.blocksPlaced === FOUNDATION_BLOCK_COUNT) return 'complete';
+  if (state.suppliesMined < FOUNDATION_BLOCK_COUNT) return 'mine-supplies';
+  if (state.pickupsCollected < FOUNDATION_BLOCK_COUNT) return 'collect-supplies';
+  if (!state.repairStarted && state.blocksPlaced < FOUNDATION_BLOCK_COUNT) {
+    return state.inventory.selectedSlot === 1 ? 'place-frame' : 'select-block';
   }
-  if (!state.wallPlaced && state.inventoryCount > 0) {
-    if (state.selectedSlot !== 1) return 'select-wall';
-    return state.placementCount === 0 ? 'place-wall' : 'repair-wall';
+  if (!state.repairStarted && state.blocksPlaced === FOUNDATION_BLOCK_COUNT) {
+    return state.inventory.selectedSlot === 0 ? 'remove-block' : 'select-tool';
   }
-  if (state.wallPlaced && state.placementCount === 1) {
-    return state.selectedSlot === 0 ? 'remove-wall' : 'select-tool';
-  }
-  return 'mine-supply';
+  if (inventoryCount(state.inventory, 'builder-block') === 0) return 'collect-repair';
+  return state.inventory.selectedSlot === 1 ? 'repair-frame' : 'select-block';
 }
 
 export function selectProofSlot(state: ProofState, slot: number): ProofState {
-  if (!Number.isInteger(slot) || slot < 0 || slot > 1) return state;
+  const inventory = selectHotbarSlot(state.inventory, slot);
+  if (inventory === state.inventory) return state;
   return {
     ...state,
-    selectedSlot: slot,
+    inventory,
     miningProgress: 0,
     miningTarget: null,
-    feedback: slot === 0 ? "Builder's Pick selected." : 'Wall Module selected.',
+    feedback: slot === 0 ? "Builder's Pick selected." : 'Builder Block selected.',
   };
 }
 
@@ -78,7 +91,7 @@ export function cancelProofMining(state: ProofState): ProofState {
     ...state,
     miningProgress: 0,
     miningTarget: null,
-    feedback: 'Mining canceled. Keep the crosshair on the highlighted model block.',
+    feedback: 'Mining canceled. Keep the crosshair on one highlighted model block.',
   };
 }
 
@@ -87,25 +100,23 @@ export function advanceProofMining(
   target: ProofTarget,
   amount: number,
 ): MiningTransition {
-  if (state.selectedSlot !== 0) {
+  if (state.inventory.selectedSlot !== 0) {
     return {
-      state: {
-        ...cancelProofMining(state),
-        feedback: "Select the Builder's Pick before mining.",
-      },
+      state: { ...cancelProofMining(state), feedback: "Select the Builder's Pick before mining." },
       event: 'none',
     };
   }
-
-  const validTarget =
-    (target === 'supply' && state.supplyAvailable) ||
-    (target === 'placed-wall' && state.wallPlaced && state.placementCount === 1);
-  if (!validTarget || amount <= 0) {
+  const validSupply = target === 'supply' && state.suppliesMined < FOUNDATION_BLOCK_COUNT;
+  const validRepair =
+    target === 'placed-block' &&
+    !state.repairStarted &&
+    state.blocksPlaced === FOUNDATION_BLOCK_COUNT;
+  if ((!validSupply && !validRepair) || amount <= 0) {
     return {
       state: {
         ...cancelProofMining(state),
         feedback: target
-          ? 'That block is not mineable in this proof.'
+          ? 'That model block is not removable now.'
           : 'Put the crosshair on the outlined model block.',
       },
       event: 'none',
@@ -126,15 +137,18 @@ export function advanceProofMining(
     };
   }
 
-  if (target === 'supply') {
+  if (validSupply) {
+    const suppliesMined = state.suppliesMined + 1;
     return {
       state: {
         ...state,
-        supplyAvailable: false,
-        dropAvailable: true,
+        suppliesMined,
         miningProgress: 0,
         miningTarget: null,
-        feedback: 'Supply block broken. Walk over the dropped Wall Module.',
+        feedback:
+          suppliesMined === FOUNDATION_BLOCK_COUNT
+            ? 'Three physical drops are ready. Walk over each one to collect it.'
+            : `Builder Block ${suppliesMined} of ${FOUNDATION_BLOCK_COUNT} mined. Mine the next striped block.`,
       },
       event: 'supply-broken',
     };
@@ -143,71 +157,81 @@ export function advanceProofMining(
   return {
     state: {
       ...state,
-      wallPlaced: false,
-      dropAvailable: true,
+      blocksPlaced: state.blocksPlaced - 1,
+      repairStarted: true,
       miningProgress: 0,
       miningTarget: null,
-      feedback: 'Wall Module removed. Walk over it, then rebuild the model.',
+      feedback: 'Builder Block removed. Walk over the drop, then repair the frame.',
     },
-    event: 'wall-removed',
+    event: 'block-removed',
   };
 }
 
-export function collectProofDrop(state: ProofState): ProofState {
-  if (!state.dropAvailable) return state;
-  return {
-    ...state,
-    dropAvailable: false,
-    inventoryCount: state.inventoryCount + 1,
-    feedback: 'Wall Module collected. Select slot 2.',
-  };
-}
-
-export function placeProofWall(state: ProofState, target: ProofTarget): PlacementTransition {
-  if (target !== 'anchor') {
+export function collectProofDrop(state: ProofState, count = 1): CollectionTransition {
+  const result = addInventoryItem(state.inventory, 'builder-block', count);
+  if (result.remainder > 0) {
     return {
-      state: {
-        ...state,
-        feedback: 'Invalid placement: aim at the outlined outer wall anchor.',
-      },
-      event: 'none',
+      state: { ...state, feedback: 'Hotbar full. The model drop remains recoverable.' },
+      accepted: false,
     };
   }
-  if (state.selectedSlot !== 1) {
-    return {
-      state: {
-        ...state,
-        feedback: 'Select the Wall Module in slot 2 before placing.',
-      },
-      event: 'none',
-    };
-  }
-  if (state.inventoryCount < 1 || state.wallPlaced) {
-    return {
-      state: {
-        ...state,
-        feedback: state.wallPlaced
-          ? 'The outer wall anchor is already filled.'
-          : 'Collect a Wall Module first.',
-      },
-      event: 'none',
-    };
-  }
-
-  const placementCount = state.placementCount + 1;
+  const pickupsCollected = state.pickupsCollected + count;
   return {
     state: {
       ...state,
-      inventoryCount: state.inventoryCount - 1,
-      wallPlaced: true,
-      placementCount,
-      miningProgress: 0,
-      miningTarget: null,
-      feedback:
-        placementCount >= 2
-          ? 'Proof complete: the fictional model block was removed and replaced.'
-          : "Wall Module installed. Select the Builder's Pick and remove it once.",
+      inventory: result.inventory,
+      pickupsCollected,
+      feedback: state.repairStarted
+        ? 'Repair block collected. Select slot 2 and restore the empty bracket.'
+        : `Collected ${Math.min(pickupsCollected, FOUNDATION_BLOCK_COUNT)} of ${FOUNDATION_BLOCK_COUNT} Builder Blocks.`,
     },
-    event: placementCount >= 2 ? 'wall-repaired' : 'wall-placed',
+    accepted: true,
+  };
+}
+
+export function placeProofBlock(state: ProofState, validTarget: boolean): PlacementTransition {
+  if (!validTarget) {
+    return {
+      state: {
+        ...state,
+        feedback: 'Invalid placement: use a bracketed empty cell beside the targeted face.',
+      },
+      event: 'none',
+    };
+  }
+  if (state.inventory.selectedSlot !== 1) {
+    return {
+      state: { ...state, feedback: 'Select the Builder Block in slot 2 before placing.' },
+      event: 'none',
+    };
+  }
+  const inventory = removeInventoryItem(state.inventory, 'builder-block', 1);
+  if (!inventory) {
+    return {
+      state: { ...state, feedback: 'Collect a Builder Block before placing.' },
+      event: 'none',
+    };
+  }
+  if (state.blocksPlaced >= FOUNDATION_BLOCK_COUNT) {
+    return {
+      state: { ...state, feedback: 'The yard repair frame is already filled.' },
+      event: 'none',
+    };
+  }
+
+  const blocksPlaced = state.blocksPlaced + 1;
+  const repaired = state.repairStarted && blocksPlaced === FOUNDATION_BLOCK_COUNT;
+  return {
+    state: {
+      ...state,
+      inventory,
+      blocksPlaced,
+      feedback: repaired
+        ? 'Yard repair complete: the removed model block was recovered and replaced.'
+        : blocksPlaced === FOUNDATION_BLOCK_COUNT
+          ? "Three-face frame filled. Select the Builder's Pick and remove one block."
+          : `Builder Block ${blocksPlaced} of ${FOUNDATION_BLOCK_COUNT} placed by target face.`,
+    },
+    event: repaired ? 'block-repaired' : 'block-placed',
   };
 }
