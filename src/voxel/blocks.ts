@@ -9,6 +9,9 @@ export const enum VoxelBlock {
   Leaves = 7,
   Builder = 8,
   Step = 9,
+  CellWall = 10,
+  CellMembrane = 11,
+  ModelControl = 12,
 }
 
 export interface VoxelBlockDefinition {
@@ -18,7 +21,7 @@ export interface VoxelBlockDefinition {
   collisionHeight: number;
 }
 
-export const VOXEL_PALETTE_VERSION = 1;
+export const VOXEL_PALETTE_VERSION = 2;
 
 export const VOXEL_BLOCK_DEFINITIONS: Readonly<Record<VoxelBlock, VoxelBlockDefinition>> = {
   [VoxelBlock.Air]: {
@@ -81,10 +84,28 @@ export const VOXEL_BLOCK_DEFINITIONS: Readonly<Record<VoxelBlock, VoxelBlockDefi
     atlasTile: 9,
     collisionHeight: 0.5,
   },
+  [VoxelBlock.CellWall]: {
+    id: VoxelBlock.CellWall,
+    name: 'Cell Wall Model Module',
+    atlasTile: 10,
+    collisionHeight: 1,
+  },
+  [VoxelBlock.CellMembrane]: {
+    id: VoxelBlock.CellMembrane,
+    name: 'Cell Membrane Model Module',
+    atlasTile: 11,
+    collisionHeight: 1,
+  },
+  [VoxelBlock.ModelControl]: {
+    id: VoxelBlock.ModelControl,
+    name: 'Model Control',
+    atlasTile: 12,
+    collisionHeight: 1,
+  },
 };
 
 export function isVoxelBlock(value: number): value is VoxelBlock {
-  return Number.isInteger(value) && value >= VoxelBlock.Air && value <= VoxelBlock.Step;
+  return Number.isInteger(value) && value >= VoxelBlock.Air && value <= VoxelBlock.ModelControl;
 }
 
 export function isSolidVoxel(value: number): boolean {

@@ -3,10 +3,10 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 const root = createRoot(document.getElementById('root')!);
-const proofRequested = new URLSearchParams(window.location.search).get('proof') === 'voxel';
+const proofRequested = new URLSearchParams(window.location.search).get('proof');
 
 async function bootstrap() {
-  if (proofRequested) {
+  if (proofRequested === 'voxel' || proofRequested === 'boundary') {
     if (!import.meta.env.DEV) {
       root.render(
         <main className="screen">
@@ -22,6 +22,15 @@ async function bootstrap() {
             </a>
           </section>
         </main>,
+      );
+      return;
+    }
+    if (proofRequested === 'boundary') {
+      const { default: BoundarySliceApp } = await import('./proof/BoundarySliceApp');
+      root.render(
+        <StrictMode>
+          <BoundarySliceApp />
+        </StrictMode>,
       );
       return;
     }

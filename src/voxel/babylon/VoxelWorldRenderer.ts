@@ -20,6 +20,9 @@ const ATLAS_COLORS = [
   ['#438f55', '#60b66b', '#2d6943'],
   ['#79b85a', '#a9d17b', '#37653b'],
   ['#efad45', '#ffd27a', '#9a5b28'],
+  ['#648f47', '#91b963', '#35562d'],
+  ['#4ba8b6', '#8bd2d4', '#286a75'],
+  ['#d6a94e', '#ffe08a', '#8a6228'],
 ] as const;
 
 export interface VoxelRendererStats {

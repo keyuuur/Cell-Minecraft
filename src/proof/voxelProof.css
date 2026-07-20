@@ -117,6 +117,25 @@ button {
   letter-spacing: 0.07em;
 }
 
+.boundary-layer-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 7px 0;
+}
+
+.boundary-layer-progress span,
+.boundary-checkpoint-score {
+  padding: 4px 7px;
+  border: 2px solid rgb(255 242 176 / 68%);
+  color: #f5ffd1;
+  background: rgb(10 24 17 / 62%);
+}
+
+.boundary-checkpoint-score {
+  color: #ffe3a1;
+}
+
 .voxel-proof-model-note {
   color: #ffe4a3;
   font-weight: 700;
@@ -338,6 +357,10 @@ button {
   background: linear-gradient(#81562f, #56371f) !important;
 }
 
+.boundary-context-action {
+  min-width: 104px !important;
+}
+
 .voxel-proof-place {
   border-color: #dcff8a !important;
   background: linear-gradient(#567d3f, #34512f) !important;
@@ -497,6 +520,15 @@ button {
     line-height: 1.12;
   }
 
+  .boundary-layer-progress {
+    margin: 4px 0;
+  }
+
+  .boundary-layer-progress span,
+  .boundary-checkpoint-score {
+    padding: 2px 5px;
+  }
+
   .voxel-proof-joystick {
     width: 116px;
     height: 116px;
@@ -544,6 +576,10 @@ button {
 
   .voxel-proof-actions {
     grid-template-columns: 92px 92px;
+  }
+
+  .boundary-slice .voxel-proof-objective {
+    width: min(430px, calc(100vw - 278px));
   }
 }
 

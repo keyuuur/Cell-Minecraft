@@ -1,4 +1,5 @@
-export type VoxelItemId = 'builder-pick' | 'builder-block';
+export type VoxelItemId =
+  'builder-pick' | 'builder-block' | 'cell-wall-module' | 'cell-membrane-module';
 
 export interface HotbarSlot {
   item: VoxelItemId | null;

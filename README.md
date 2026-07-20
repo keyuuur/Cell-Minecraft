@@ -30,6 +30,24 @@ is not connected to IndexedDB. The route is available only from the Vite
 development server; production builds show a safe “proof unavailable” page
 instead.
 
+### Development-only boundary vertical slice
+
+Phase 3 adds a second isolated route:
+
+```text
+http://localhost:5173/?proof=boundary
+```
+
+It uses the reusable fixed voxel world for one bounded plant-cell cutaway: six
+paired outer wall model modules, six strictly inner membrane model modules, and
+a non-solid cytoplasm fill. It gathers one physical stack per layer, requires
+ray-targeted placement and nearby function inspection, and supports
+remove/collect/rebuild/reinspect correction. A pure versioned adapter projects
+validated sector occupancy into the existing mission scoring contract; the
+slice does not collect identity, write saves, submit results, or expose advanced
+organelles. Production builds show the same safe unavailable page used by the
+foundation proof.
+
 ## Quality checks
 
 ```powershell

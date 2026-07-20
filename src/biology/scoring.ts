@@ -11,7 +11,8 @@ export function calculateScore(mission: MissionState): ScoreBreakdown {
   const presentCount = REQUIRED_STRUCTURES.filter((id) => isStructurePresent(mission, id)).length;
   const requiredStructures = round(30 * (presentCount / REQUIRED_STRUCTURES.length));
 
-  const wallOutsideMembrane = mission.wallPanels === PANEL_TARGET ? 5 : 0;
+  const wallOutsideMembrane =
+    mission.wallPanels === PANEL_TARGET && mission.membranePanels === PANEL_TARGET ? 5 : 0;
   const vacuoleCentral = mission.placements.centralVacuole ? 4 : 0;
   const broadZoneCount = ['nucleus', 'ribosomes', 'mitochondria', 'chloroplasts'].filter(
     (id) => mission.placements[id as keyof typeof mission.placements],
