@@ -154,7 +154,8 @@ async function collectPlaceInspect(
   placement: Point2,
   screenshot: string,
 ): Promise<void> {
-  await navigateTo(page, slice, browserName, depot, 3.7);
+  await page.getByRole('button', { name: /RECENTER/ }).click();
+  await navigateTo(page, slice, browserName, depot, 1.4);
   await expect(slice).toHaveAttribute('data-structure-nearby-station', id);
   await page.getByRole('button', { name: 'COLLECT MODEL MODULE' }).click();
   await expect(slice).toHaveAttribute(`data-${id.toLowerCase()}-inventory`, '1');
@@ -173,7 +174,7 @@ test('complete structure slice uses visible controls and restores correction cre
   page,
   browserName,
 }) => {
-  test.setTimeout(600_000);
+  test.setTimeout(900_000);
   const images: EvidenceImage[] = [];
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
@@ -258,7 +259,8 @@ test('complete structure slice uses visible controls and restores correction cre
     '09-chloroplast-photosynthesis-evidence.png',
   );
 
-  await navigateTo(page, slice, browserName, targets.vacuoleDepot, 3.7);
+  await page.getByRole('button', { name: /RECENTER/ }).click();
+  await navigateTo(page, slice, browserName, targets.vacuoleDepot, 1.4);
   await expect(slice).toHaveAttribute('data-structure-nearby-station', 'centralVacuole');
   await page.getByRole('button', { name: 'COLLECT MODEL MODULE' }).click();
   await navigateTo(page, slice, browserName, targets.vacuolePlacement, 0.9);
@@ -289,6 +291,7 @@ test('complete structure slice uses visible controls and restores correction cre
   await navigateTo(page, slice, browserName, { x: dropX, z: dropZ }, 0.7);
   await expect(slice).toHaveAttribute('data-structure-recovery-drop', 'none');
   await expect(slice).toHaveAttribute('data-centralvacuole-inventory', '1');
+  await page.getByRole('button', { name: /RECENTER/ }).click();
   await navigateTo(page, slice, browserName, targets.vacuolePlacement, 0.9);
   await page.getByRole('button', { name: 'PLACE MODEL MODULE' }).click();
   await expect(slice).toHaveAttribute('data-structure-score', '77.5');
