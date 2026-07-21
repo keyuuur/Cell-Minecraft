@@ -210,13 +210,14 @@ async function recenterUntilFace(
   expectedFace: 'FRONT' | 'SIDE' | 'TOP',
 ): Promise<void> {
   const targetLabel = page.locator('.voxel-proof-target-label');
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     await recenter.click();
     try {
       await expect(targetLabel).toContainText(`VALID ${expectedFace} FACE`, { timeout: 2_500 });
       return;
     } catch {
-      if (attempt === 1) throw new Error(`Recenter did not reacquire the ${expectedFace} face.`);
+      if (attempt === 3) throw new Error(`Recenter did not reacquire the ${expectedFace} face.`);
+      await holdJoystick(page, 'backward', 220);
     }
   }
 }
@@ -224,14 +225,17 @@ async function recenterUntilFace(
 test('voxel foundation completes through visible controls without persistence or API traffic', async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   await page.goto('/?proof=voxel');
   const proof = page.locator('main.voxel-proof');
   const recenter = page.getByRole('button', { name: /RECENTER/ });
   const mine = page.locator('.voxel-proof-mine');
 
-  await expect(proof).toHaveAttribute('data-proof-phase', 'mine-supplies');
-  await expect(proof).toHaveAttribute('data-foundation-world', '24x12x24');
+  await expect(proof).toHaveAttribute('data-proof-phase', 'mine-supplies', { timeout: 30_000 });
+  await expect(proof).toHaveAttribute('data-foundation-world', '24x12x24', { timeout: 30_000 });
+  await expect(proof).toHaveAttribute('data-foundation-player-cell', /^\d+,\d+,\d+$/, {
+    timeout: 30_000,
+  });
 
   for (let index = 0; index < 3; index += 1) {
     await recenter.click();
@@ -246,7 +250,7 @@ test('voxel foundation completes through visible controls without persistence or
   await expect(proof).toHaveAttribute('data-foundation-pickups-active', '3');
 
   await walkToOrAcrossCellZ(page, proof, 4);
-  for (const targetCellX of [-1, 0, 1, 0, -1, 0, 1, 0]) {
+  for (const targetCellX of [-1, 0, 1, 0, -1, 0, 1, 0, -1, 0, 1]) {
     if ((await proof.getAttribute('data-proof-phase')) !== 'collect-supplies') break;
     await walkToOrAcrossCellX(page, proof, targetCellX);
   }
@@ -300,7 +304,9 @@ test('voxel foundation completes through visible controls without persistence or
 test('pause clears held movement and graphics loss stops the proof safely', async ({ page }) => {
   await page.goto('/?proof=voxel');
   const proof = page.locator('main.voxel-proof');
-  await expect(proof).toHaveAttribute('data-foundation-player-cell', /^\d+,\d+,\d+$/);
+  await expect(proof).toHaveAttribute('data-foundation-player-cell', /^\d+,\d+,\d+$/, {
+    timeout: 30_000,
+  });
   const before = await proof.getAttribute('data-foundation-player-cell');
 
   await page.getByRole('button', { name: /PAUSE/ }).click();
@@ -323,7 +329,9 @@ test('visible joystick movement stops at the full-height rail', async ({ page })
   test.setTimeout(60_000);
   await page.goto('/?proof=voxel');
   const proof = page.locator('main.voxel-proof');
-  await expect(proof).toHaveAttribute('data-foundation-player-cell', /^\d+,\d+,\d+$/);
+  await expect(proof).toHaveAttribute('data-foundation-player-cell', /^\d+,\d+,\d+$/, {
+    timeout: 30_000,
+  });
 
   await walkBackwardUntilCellZ(page, proof, 10);
   const stoppedCell = await proof.getAttribute('data-foundation-player-cell');

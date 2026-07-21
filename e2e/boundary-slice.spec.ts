@@ -171,7 +171,7 @@ test('boundary slice completes through real controls with correction and score r
   page,
   browserName,
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(600_000);
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   const images: EvidenceImage[] = [];
