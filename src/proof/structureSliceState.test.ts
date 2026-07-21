@@ -64,9 +64,20 @@ describe('Phase 4 structure slice state', () => {
     expect(structureSliceCheckpoint(state).score.total).toBe(80);
     expect(structureSliceObjective(state)).toContain('remove one prefab');
 
-    state = removeStructureSliceModule(state, 'mitochondria');
+    const playerPosition = { x: 8, y: 1, z: -3 };
+    state = removeStructureSliceModule(state, 'mitochondria', playerPosition);
     expect(structureSliceCheckpoint(state).score.total).toBeLessThan(80);
     expect(state.inventory.mitochondria).toBe(0);
+    expect(state.recoveryDrop).not.toBeNull();
+    expect(
+      Math.hypot(
+        state.recoveryDrop!.position.x - playerPosition.x,
+        state.recoveryDrop!.position.z - playerPosition.z,
+      ),
+    ).toBeCloseTo(1.8);
+    expect(Math.hypot(state.recoveryDrop!.position.x, state.recoveryDrop!.position.z)).toBeLessThan(
+      Math.hypot(playerPosition.x, playerPosition.z),
+    );
     state = collectStructureRecoveryDrop(state, 'mitochondria');
     state = placeSelectedStructureSliceModule(state, positions.mitochondria);
     expect(structureSliceCheckpoint(state).score.total).toBe(77.5);

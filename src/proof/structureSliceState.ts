@@ -182,9 +182,18 @@ export function removeStructureSliceModule(
   next.inventory[id] = 0;
   next.selectedSlot = 0;
   next.correctionStarted = true;
+  const radius = Math.hypot(dropPosition.x, dropPosition.z);
+  const inwardOffset = radius > 0.1 ? 1.8 / radius : 0;
   next.recoveryDrop = {
     id,
-    position: { x: dropPosition.x + 1.8, y: 1, z: dropPosition.z },
+    position:
+      radius > 0.1
+        ? {
+            x: dropPosition.x - dropPosition.x * inwardOffset,
+            y: 1,
+            z: dropPosition.z - dropPosition.z * inwardOffset,
+          }
+        : { x: 1.8, y: 1, z: 0 },
   };
   next.invalidPlacement = null;
   next.feedback = `${STRUCTURE_LABELS[id]} removed. Walk over the physical model drop, rebuild, then reinspect.`;

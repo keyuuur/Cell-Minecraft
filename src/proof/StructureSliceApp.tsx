@@ -154,8 +154,7 @@ export default function StructureSliceApp() {
   const interact = () => {
     controllerRef.current?.swingTool();
     if (removeAction) {
-      const position = controllerRef.current?.getPlacementPosition() ?? playerPosition;
-      setState((current) => removeStructureSliceModule(current, nearbyStructure, position));
+      setState((current) => removeStructureSliceModule(current, nearbyStructure, playerPosition));
       return;
     }
     if (stationAction) {
