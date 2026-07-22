@@ -1,0 +1,71 @@
+.voxel-mission .voxel-proof-objective {
+  width: min(500px, calc(100vw - 350px));
+}
+
+.voxel-mission .voxel-proof-utilities {
+  grid-template-columns: repeat(3, minmax(96px, auto));
+}
+
+.voxel-mission .voxel-proof-fps {
+  grid-column: 1 / -1;
+}
+
+.voxel-mission .mission-actions {
+  grid-template-columns: 128px;
+}
+
+.voxel-mission .mission-primary-action {
+  min-width: 128px;
+  min-height: 76px;
+}
+
+.voxel-mission .mission-primary-action span {
+  font-size: 0.72rem;
+}
+
+.voxel-mission .mission-hotbar button strong {
+  font-size: 0.7rem;
+}
+
+.mission-overview-note {
+  position: absolute;
+  z-index: 6;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  gap: 4px;
+  width: min(360px, 58vw);
+  padding: 10px 14px;
+  transform: translate(-50%, -50%);
+  border: 3px solid #fff2b0;
+  color: #fffbe2;
+  background: rgb(12 30 22 / 88%);
+  box-shadow: 6px 6px 0 rgb(13 25 18 / 70%);
+  font-size: 0.76rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.mission-overview-note strong {
+  color: #dcff78;
+}
+
+@media (max-height: 700px) {
+  .voxel-mission .voxel-proof-objective {
+    width: min(480px, calc(100vw - 332px));
+  }
+
+  .voxel-mission .mission-complete {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .voxel-mission .voxel-proof-objective {
+    width: min(430px, calc(100vw - 318px));
+  }
+
+  .voxel-mission .voxel-proof-utilities {
+    grid-template-columns: repeat(3, minmax(88px, auto));
+  }
+}

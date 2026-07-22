@@ -9,7 +9,8 @@ async function bootstrap() {
   if (
     proofRequested === 'voxel' ||
     proofRequested === 'boundary' ||
-    proofRequested === 'structures'
+    proofRequested === 'structures' ||
+    proofRequested === 'mission'
   ) {
     if (!import.meta.env.DEV) {
       root.render(
@@ -43,6 +44,15 @@ async function bootstrap() {
       root.render(
         <StrictMode>
           <StructureSliceApp />
+        </StrictMode>,
+      );
+      return;
+    }
+    if (proofRequested === 'mission') {
+      const { default: VoxelMissionApp } = await import('./proof/VoxelMissionApp');
+      root.render(
+        <StrictMode>
+          <VoxelMissionApp />
         </StrictMode>,
       );
       return;

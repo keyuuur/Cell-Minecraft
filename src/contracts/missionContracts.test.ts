@@ -54,7 +54,14 @@ import {
   createVoxelContractWorld,
   PHASE4_STRUCTURE_POSITIONS,
 } from './missionContracts.fixtures';
-import { CENTRAL_VACUOLE_ANCHOR, validatePrefabPlacements } from './prefabRegistry';
+import {
+  CENTRAL_VACUOLE_ANCHOR,
+  MISSION_PREFAB_REGISTRY,
+  canCompletePrefabPlacements,
+  prefabCollisionCells,
+  validatePrefabPlacements,
+  validatePrefabPlayerSafety,
+} from './prefabRegistry';
 
 function completeStructureAdapter(): StructureMissionVoxelStateV2 {
   let state = createStructureMissionVoxelState();
@@ -281,6 +288,13 @@ describe('integrated voxel mission contracts', () => {
 
   it('freezes an integer, interior, non-overlapping prefab coordinate space with clearance', () => {
     expect(validatePrefabPlacements(PHASE4_STRUCTURE_POSITIONS)).toEqual({ valid: true });
+    expect(MISSION_PREFAB_REGISTRY.nucleus.heightCells).toBe(3);
+    expect(MISSION_PREFAB_REGISTRY.centralVacuole.heightCells).toBe(4);
+    expect(
+      prefabCollisionCells('centralVacuole', CENTRAL_VACUOLE_ANCHOR).every(
+        (cell) => cell.y >= 1 && cell.y <= 4,
+      ),
+    ).toBe(true);
     expect(
       validatePrefabPlacements({
         ...PHASE4_STRUCTURE_POSITIONS,
@@ -309,6 +323,66 @@ describe('integrated voxel mission contracts', () => {
       }),
     ).toMatchObject({ valid: false, reason: 'no-interaction-clearance' });
     expect(PHASE4_STRUCTURE_POSITIONS.centralVacuole).toEqual(CENTRAL_VACUOLE_ANCHOR);
+  });
+
+  it('rejects globally unreachable inspection space and continuous player overlap', () => {
+    const sealedLayout = {
+      nucleus: { x: -3, y: 1, z: -5 },
+      ribosomes: { x: 2, y: 1, z: -5 },
+      mitochondria: { x: -3, y: 1, z: -2 },
+      chloroplasts: { x: 2, y: 1, z: -2 },
+      centralVacuole: { ...CENTRAL_VACUOLE_ANCHOR },
+    } as const;
+    expect(validatePrefabPlacements(sealedLayout)).toMatchObject({
+      valid: false,
+      reason: 'unreachable-interaction',
+    });
+    expect(
+      validatePrefabPlayerSafety(PHASE4_STRUCTURE_POSITIONS, {
+        x: PHASE4_STRUCTURE_POSITIONS.nucleus.x - 0.6,
+        y: 0.5,
+        z: PHASE4_STRUCTURE_POSITIONS.nucleus.z,
+      }),
+    ).toMatchObject({ valid: false, reason: 'player-overlap' });
+    expect(validatePrefabPlayerSafety(PHASE4_STRUCTURE_POSITIONS, { x: 3, y: 0.5, z: 0 })).toEqual({
+      valid: true,
+    });
+    const pocketLayout = {
+      nucleus: { x: -3, y: 1, z: -5 },
+      ribosomes: { x: -3, y: 1, z: -2 },
+      mitochondria: { x: -1, y: 1, z: -1 },
+      chloroplasts: { x: 1, y: 1, z: -1 },
+      centralVacuole: { ...CENTRAL_VACUOLE_ANCHOR },
+    } as const;
+    expect(validatePrefabPlacements(pocketLayout)).toEqual({ valid: true });
+    expect(validatePrefabPlayerSafety(pocketLayout, { x: -3, y: 0.5, z: -3 })).toEqual({
+      valid: false,
+      reason: 'player-trapped',
+    });
+  });
+
+  it('rejects a restored snapshot whose player already overlaps an installed boundary panel', () => {
+    const world = createVoxelContractWorld();
+    const snapshot = createPhase4VoxelMissionFixture(world);
+    snapshot.player = { ...snapshot.player, x: 4, y: 0.5, z: -2 };
+
+    expect(validatePrefabPlayerSafety(snapshot.placements, snapshot.player)).toEqual({
+      valid: true,
+    });
+    expect(validateVoxelMissionSnapshot(snapshot, world)).toBe(false);
+  });
+
+  it('rejects locally valid partial layouts that cannot reach a complete arrangement', () => {
+    const deadPartial = {
+      nucleus: { x: -3, y: 1, z: -4 },
+      ribosomes: { x: -3, y: 1, z: -1 },
+    } as const;
+    expect(canCompletePrefabPlacements(deadPartial)).toBe(false);
+    expect(validatePrefabPlacements(deadPartial)).toEqual({
+      valid: false,
+      reason: 'no-completable-layout',
+    });
+    expect(canCompletePrefabPlacements({ nucleus: PHASE4_STRUCTURE_POSITIONS.nucleus })).toBe(true);
   });
 
   it('rejects unknown structures, evidence without placement, overlap, and false completion', () => {

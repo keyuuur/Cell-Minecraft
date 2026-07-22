@@ -27,13 +27,14 @@ import { VOXEL_MISSION_TEMPLATE_ID } from '../types/game';
 import {
   BOUNDARY_SECTORS,
   projectBoundaryMission,
+  validateBoundaryPlayerSafety,
   validateBoundaryVoxelState,
 } from '../voxel/boundaryAdapter';
 import { VOXEL_PALETTE_VERSION } from '../voxel/blocks';
-import { VOXEL_STRUCTURE_ORDER } from '../voxel/structureMissionAdapter';
+import { MISSION_STRUCTURE_ORDER } from '../voxel/missionDefinition';
 import type { VoxelPoint } from '../voxel/types';
 import type { VoxelWorld } from '../voxel/VoxelWorld';
-import { prefabOccupiedCells, validatePrefabPlacements } from './prefabRegistry';
+import { validatePrefabPlacements, validatePrefabPlayerSafety } from './prefabRegistry';
 
 export const LEGACY_V2_SAVE_POLICY = 'diagnostic-export-and-fresh-start' as const;
 export const CORRUPT_V2_SAVE_POLICY = 'diagnostic-export-and-safe-reset' as const;
@@ -42,12 +43,12 @@ export const MISSION_INTERACTION_REACH = 5;
 export const MISSION_MODULE_IDS = [
   'cellWall',
   'cellMembrane',
-  ...VOXEL_STRUCTURE_ORDER,
+  ...MISSION_STRUCTURE_ORDER,
 ] as const satisfies readonly MissionModuleId[];
 
 const missionModuleIds = new Set<string>(MISSION_MODULE_IDS);
 const missionHotbarItemIds = new Set<string>(['builder-pick', ...MISSION_MODULE_IDS]);
-const placeableIds = new Set<string>(VOXEL_STRUCTURE_ORDER);
+const placeableIds = new Set<string>(MISSION_STRUCTURE_ORDER);
 const structureIds = new Set<string>(REQUIRED_STRUCTURES);
 const boundarySectorIds = new Set(BOUNDARY_SECTORS.map((sector) => sector.id));
 const missionStages = new Set<string>(ASSIGNMENT.stages);
@@ -344,13 +345,13 @@ const allRequiredStructuresPresent = (snapshot: VoxelMissionSnapshotV1): boolean
   snapshot.boundary.wallAnchors.length === 6 &&
   snapshot.boundary.membraneAnchors.length === 6 &&
   snapshot.boundary.cytoplasm === 'filled' &&
-  VOXEL_STRUCTURE_ORDER.every((id) => Boolean(snapshot.placements[id]));
+  MISSION_STRUCTURE_ORDER.every((id) => Boolean(snapshot.placements[id]));
 
 const allFunctionEvidencePresent = (snapshot: VoxelMissionSnapshotV1): boolean =>
   snapshot.boundary.functionEvidence.cellWall &&
   snapshot.boundary.functionEvidence.cellMembrane &&
   snapshot.boundary.functionEvidence.cytoplasm &&
-  VOXEL_STRUCTURE_ORDER.every((id) => snapshot.functionEvidence[id] === true);
+  MISSION_STRUCTURE_ORDER.every((id) => snapshot.functionEvidence[id] === true);
 
 export function validateVoxelMissionSnapshot(
   value: unknown,
@@ -372,6 +373,7 @@ export function validateVoxelMissionSnapshot(
     !exactKeys(snapshot.boundary, boundaryKeys) ||
     !exactKeys(snapshot.boundary.functionEvidence, boundaryFunctionKeys) ||
     !validateBoundaryVoxelState(snapshot.boundary) ||
+    !validateBoundaryPlayerSafety(snapshot.boundary, snapshot.player).valid ||
     !exactKeys(snapshot.depotInventory, missionModuleIds) ||
     !knownKeysOnly(snapshot.placements, placeableIds) ||
     !knownKeysOnly(snapshot.functionEvidence, placeableIds) ||
@@ -408,7 +410,7 @@ export function validateVoxelMissionSnapshot(
     return false;
   }
 
-  for (const id of VOXEL_STRUCTURE_ORDER) {
+  for (const id of MISSION_STRUCTURE_ORDER) {
     const placement = snapshot.placements[id];
     const evidence = snapshot.functionEvidence[id];
     if (placement !== undefined && (!exactKeys(placement, pointKeys) || !finitePoint(placement))) {
@@ -417,17 +419,7 @@ export function validateVoxelMissionSnapshot(
     if (evidence && !placement) return false;
   }
   if (!validatePrefabPlacements(snapshot.placements).valid) return false;
-
-  const occupiedPlacementCells = new Set<string>();
-  for (const id of VOXEL_STRUCTURE_ORDER) {
-    const placement = snapshot.placements[id];
-    if (!placement) continue;
-    for (const cell of prefabOccupiedCells(id, placement)) {
-      occupiedPlacementCells.add(`${cell.x},${cell.z}`);
-    }
-  }
-  const playerCell = `${Math.round(snapshot.player.x)},${Math.round(snapshot.player.z)}`;
-  if (occupiedPlacementCells.has(playerCell) && snapshot.player.y < 4.5) return false;
+  if (!validatePrefabPlayerSafety(snapshot.placements, snapshot.player).valid) return false;
 
   if (
     (Object.keys(snapshot.placements).length > 0 ||
@@ -595,7 +587,7 @@ export function projectVoxelMissionSnapshot(snapshot: VoxelMissionSnapshotV1, wo
     if (snapshot.depotInventory[id] < MISSION_MODULE_TOTALS[id]) mission.collected[id] = true;
   }
   if (snapshot.boundary.cytoplasm === 'filled') mission.collected.cytoplasm = true;
-  for (const [index, id] of VOXEL_STRUCTURE_ORDER.entries()) {
+  for (const [index, id] of MISSION_STRUCTURE_ORDER.entries()) {
     const position = snapshot.placements[id];
     if (position) {
       mission.placements[id] = { id, position: { ...position }, placedAt: index + 1 };
@@ -1101,7 +1093,7 @@ function validClientCore(value: unknown): value is ClientSubmissionPayloadV2 {
     objectives.wallPanels === 6 &&
     objectives.membranePanels === 6 &&
     objectives.cytoplasm &&
-    VOXEL_STRUCTURE_ORDER.every((id) => objectives[id]) &&
+    MISSION_STRUCTURE_ORDER.every((id) => objectives[id]) &&
     objectives.recoveryRestored &&
     objectiveKeys
       .filter((key) => key.startsWith('effect'))

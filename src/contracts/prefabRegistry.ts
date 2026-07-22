@@ -9,6 +9,7 @@ export interface MissionPrefabContract {
   id: PlaceableStructureId;
   occupiedOffsets: readonly PrefabCellOffset[];
   interactionClearanceOffsets: readonly PrefabCellOffset[];
+  heightCells: number;
   centralOnly: boolean;
 }
 
@@ -42,6 +43,7 @@ const broadInteriorPrefab = (id: PlaceableStructureId): MissionPrefabContract =>
   id,
   occupiedOffsets: rectangle(2, 2),
   interactionClearanceOffsets: perimeter(2, 2),
+  heightCells: id === 'nucleus' ? 3 : 2,
   centralOnly: false,
 });
 
@@ -56,6 +58,7 @@ export const MISSION_PREFAB_REGISTRY: Readonly<
     id: 'centralVacuole',
     occupiedOffsets: rectangle(3, 3),
     interactionClearanceOffsets: perimeter(3, 3),
+    heightCells: 4,
     centralOnly: true,
   },
 };
@@ -90,6 +93,25 @@ export function prefabInteractionCells(
     .filter((cell) => isInteriorCell(cell.x, cell.z));
 }
 
+export interface PrefabCollisionCell extends PrefabCellOffset {
+  y: number;
+}
+
+/** Invisible logical cells used for collision and crosshair targeting. */
+export function prefabCollisionCells(
+  id: PlaceableStructureId,
+  anchor: Point3,
+): PrefabCollisionCell[] {
+  const contract = MISSION_PREFAB_REGISTRY[id];
+  return contract.occupiedOffsets.flatMap((offset) =>
+    Array.from({ length: contract.heightCells }, (_, y) => ({
+      x: anchor.x + offset.x,
+      y: anchor.y + y,
+      z: anchor.z + offset.z,
+    })),
+  );
+}
+
 export function isValidPrefabAnchor(id: PlaceableStructureId, anchor: Point3): boolean {
   if (
     ![anchor.x, anchor.y, anchor.z].every(Number.isInteger) ||
@@ -113,10 +135,43 @@ export function isValidPrefabAnchor(id: PlaceableStructureId, anchor: Point3): b
 
 export interface PrefabPlacementValidation {
   valid: boolean;
-  reason?: 'invalid-anchor' | 'overlap' | 'no-interaction-clearance';
+  reason?:
+    | 'invalid-anchor'
+    | 'overlap'
+    | 'no-interaction-clearance'
+    | 'unreachable-interaction'
+    | 'no-completable-layout';
 }
 
-export function validatePrefabPlacements(
+function reachableInteriorCells(occupied: ReadonlySet<string>): Set<string> {
+  const reachable = new Set<string>();
+  const queue: PrefabCellOffset[] = [];
+  for (let x = MISSION_INTERIOR_BOUNDS.minX; x <= MISSION_INTERIOR_BOUNDS.maxX; x += 1) {
+    const key = cellKey(x, MISSION_INTERIOR_BOUNDS.maxZ);
+    if (!occupied.has(key)) {
+      reachable.add(key);
+      queue.push({ x, z: MISSION_INTERIOR_BOUNDS.maxZ });
+    }
+  }
+  for (let index = 0; index < queue.length; index += 1) {
+    const cell = queue[index];
+    for (const [dx, dz] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const next = { x: cell.x + dx, z: cell.z + dz };
+      const key = cellKey(next.x, next.z);
+      if (!isInteriorCell(next.x, next.z) || occupied.has(key) || reachable.has(key)) continue;
+      reachable.add(key);
+      queue.push(next);
+    }
+  }
+  return reachable;
+}
+
+function validateConcretePrefabPlacements(
   placements: Partial<Record<PlaceableStructureId, Point3>>,
 ): PrefabPlacementValidation {
   const occupied = new Set<string>();
@@ -141,5 +196,138 @@ export function validatePrefabPlacements(
     );
     if (!hasClearance) return { valid: false, reason: 'no-interaction-clearance' };
   }
+
+  const reachable = reachableInteriorCells(occupied);
+  for (const [rawId, anchor] of Object.entries(placements)) {
+    if (!anchor) continue;
+    const id = rawId as PlaceableStructureId;
+    const hasReachableClearance = prefabInteractionCells(id, anchor).some((cell) =>
+      reachable.has(cellKey(cell.x, cell.z)),
+    );
+    if (!hasReachableClearance) {
+      return { valid: false, reason: 'unreachable-interaction' };
+    }
+  }
   return { valid: true };
+}
+
+const broadAnchors = (): Point3[] => {
+  const anchors: Point3[] = [];
+  for (let x = MISSION_INTERIOR_BOUNDS.minX; x < MISSION_INTERIOR_BOUNDS.maxX; x += 1) {
+    for (let z = MISSION_INTERIOR_BOUNDS.minZ; z < MISSION_INTERIOR_BOUNDS.maxZ; z += 1) {
+      const anchor = { x, y: MISSION_INTERIOR_BOUNDS.floorY, z };
+      if (isValidPrefabAnchor('nucleus', anchor)) anchors.push(anchor);
+    }
+  }
+  return anchors;
+};
+
+const anchorKey = (point: Point3): string => `${point.x},${point.y},${point.z}`;
+
+const physicalLayoutSignature = (anchors: readonly Point3[]): string =>
+  anchors.map(anchorKey).sort().join('|');
+
+let completeLayoutSignatures: Set<string> | null = null;
+
+function buildCompleteLayoutSignatures(): Set<string> {
+  const signatures = new Set<string>();
+  const ids: PlaceableStructureId[] = ['nucleus', 'ribosomes', 'mitochondria', 'chloroplasts'];
+  const anchors = broadAnchors();
+  const search = (start: number, selected: Point3[]): void => {
+    if (selected.length === ids.length) {
+      const complete = Object.fromEntries(ids.map((id, index) => [id, selected[index]])) as Partial<
+        Record<PlaceableStructureId, Point3>
+      >;
+      complete.centralVacuole = { ...CENTRAL_VACUOLE_ANCHOR };
+      if (validateConcretePrefabPlacements(complete).valid) {
+        signatures.add(physicalLayoutSignature(selected));
+      }
+      return;
+    }
+    for (let index = start; index < anchors.length; index += 1) {
+      const candidate = [...selected, anchors[index]];
+      const partial = Object.fromEntries(
+        candidate.map((anchor, candidateIndex) => [ids[candidateIndex], anchor]),
+      ) as Partial<Record<PlaceableStructureId, Point3>>;
+      if (!validateConcretePrefabPlacements(partial).valid) continue;
+      search(index + 1, candidate);
+    }
+  };
+  search(0, []);
+  return signatures;
+}
+
+function matchesPartialLayout(
+  signature: string,
+  placements: Partial<Record<PlaceableStructureId, Point3>>,
+): boolean {
+  if (
+    placements.centralVacuole &&
+    anchorKey(placements.centralVacuole) !== anchorKey(CENTRAL_VACUOLE_ANCHOR)
+  ) {
+    return false;
+  }
+  const entries = new Set(signature.split('|'));
+  return Object.entries(placements).every(([id, point]) =>
+    !point || id === 'centralVacuole' ? true : entries.has(anchorKey(point)),
+  );
+}
+
+export function canCompletePrefabPlacements(
+  placements: Partial<Record<PlaceableStructureId, Point3>>,
+): boolean {
+  completeLayoutSignatures ??= buildCompleteLayoutSignatures();
+  return [...completeLayoutSignatures].some((signature) =>
+    matchesPartialLayout(signature, placements),
+  );
+}
+
+export function validatePrefabPlacements(
+  placements: Partial<Record<PlaceableStructureId, Point3>>,
+): PrefabPlacementValidation {
+  const concrete = validateConcretePrefabPlacements(placements);
+  if (!concrete.valid) return concrete;
+  return canCompletePrefabPlacements(placements)
+    ? { valid: true }
+    : { valid: false, reason: 'no-completable-layout' };
+}
+
+export interface PrefabPlayerSafetyValidation {
+  valid: boolean;
+  reason?: 'player-overlap' | 'player-trapped';
+}
+
+/** Validates the continuous player body and a walkable route back to the open front. */
+export function validatePrefabPlayerSafety(
+  placements: Partial<Record<PlaceableStructureId, Point3>>,
+  player: Point3,
+): PrefabPlayerSafetyValidation {
+  const playerRadius = 0.32;
+  const playerHeight = 1.7;
+  for (const [rawId, anchor] of Object.entries(placements)) {
+    if (!anchor) continue;
+    const id = rawId as PlaceableStructureId;
+    for (const cell of prefabCollisionCells(id, anchor)) {
+      const overlaps =
+        player.x + playerRadius > cell.x - 0.5 &&
+        player.x - playerRadius < cell.x + 0.5 &&
+        player.y + playerHeight > cell.y - 0.5 &&
+        player.y < cell.y + 0.5 &&
+        player.z + playerRadius > cell.z - 0.5 &&
+        player.z - playerRadius < cell.z + 0.5;
+      if (overlaps) return { valid: false, reason: 'player-overlap' };
+    }
+  }
+
+  const playerCell = { x: Math.round(player.x), z: Math.round(player.z) };
+  if (!isInteriorCell(playerCell.x, playerCell.z)) return { valid: true };
+  const occupied = new Set<string>();
+  for (const [rawId, anchor] of Object.entries(placements)) {
+    if (!anchor) continue;
+    const id = rawId as PlaceableStructureId;
+    prefabOccupiedCells(id, anchor).forEach((cell) => occupied.add(cellKey(cell.x, cell.z)));
+  }
+  return reachableInteriorCells(occupied).has(cellKey(playerCell.x, playerCell.z))
+    ? { valid: true }
+    : { valid: false, reason: 'player-trapped' };
 }

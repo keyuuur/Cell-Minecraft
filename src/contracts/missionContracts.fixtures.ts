@@ -8,15 +8,12 @@ import type {
 import { VOXEL_MISSION_TEMPLATE_ID } from '../types/game';
 import { createCompletedBoundaryVoxelState } from '../voxel/boundaryAdapter';
 import { VOXEL_PALETTE_VERSION } from '../voxel/blocks';
+import { MISSION_RECOMMENDED_PREFAB_ANCHORS } from '../voxel/missionDefinition';
 import { VoxelWorld } from '../voxel/VoxelWorld';
 
-export const PHASE4_STRUCTURE_POSITIONS: Record<PlaceableStructureId, Point3> = {
-  nucleus: { x: -3, y: 1, z: -5 },
-  ribosomes: { x: 2, y: 1, z: -5 },
-  mitochondria: { x: -3, y: 1, z: -2 },
-  chloroplasts: { x: 2, y: 1, z: -2 },
-  centralVacuole: { x: -1, y: 1, z: -4 },
-};
+export const PHASE4_STRUCTURE_POSITIONS: Record<PlaceableStructureId, Point3> = structuredClone(
+  MISSION_RECOMMENDED_PREFAB_ANCHORS,
+);
 
 export function createVoxelContractWorld(): VoxelWorld {
   return new VoxelWorld({

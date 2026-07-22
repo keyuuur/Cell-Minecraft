@@ -1,5 +1,5 @@
 import { calculateScore } from '../biology/scoring';
-import type { MissionState, ScoreBreakdown, StructureId } from '../types/game';
+import type { MissionState, Point3, ScoreBreakdown, StructureId } from '../types/game';
 import type { VoxelPoint } from './types';
 
 export const BOUNDARY_ADAPTER_VERSION = 1;
@@ -37,6 +37,11 @@ export interface BoundaryCheckpoint {
   mission: MissionState;
   score: ScoreBreakdown;
   completedStructures: number;
+}
+
+export interface BoundaryPlayerSafetyValidation {
+  valid: boolean;
+  reason?: 'player-overlap';
 }
 
 const range = (start: number, end: number): number[] =>
@@ -182,6 +187,32 @@ export function validateBoundaryVoxelState(value: unknown): value is BoundaryVox
   if (state.functionEvidence.cellMembrane && !membraneComplete) return false;
   if (state.functionEvidence.cytoplasm && state.cytoplasm !== 'filled') return false;
   return true;
+}
+
+/** Rejects a boundary state whose full-height panels intersect the continuous player body. */
+export function validateBoundaryPlayerSafety(
+  state: BoundaryVoxelStateV1,
+  player: Point3,
+): BoundaryPlayerSafetyValidation {
+  const playerRadius = 0.32;
+  const playerHeight = 1.7;
+  for (const sector of BOUNDARY_SECTORS) {
+    const occupiedCells = [
+      ...(state.wallAnchors.includes(sector.id) ? sector.wallCells : []),
+      ...(state.membraneAnchors.includes(sector.id) ? sector.membraneCells : []),
+    ];
+    for (const cell of occupiedCells) {
+      const overlaps =
+        player.x + playerRadius > cell.x - 0.5 &&
+        player.x - playerRadius < cell.x + 0.5 &&
+        player.y + playerHeight > cell.y - 0.5 &&
+        player.y < cell.y + 0.5 &&
+        player.z + playerRadius > cell.z - 0.5 &&
+        player.z - playerRadius < cell.z + 0.5;
+      if (overlaps) return { valid: false, reason: 'player-overlap' };
+    }
+  }
+  return { valid: true };
 }
 
 export function parseBoundaryVoxelState(value: unknown): BoundaryVoxelStateV1 | null {

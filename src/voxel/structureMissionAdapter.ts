@@ -11,6 +11,7 @@ import type {
   ScoreBreakdown,
   StructureId,
 } from '../types/game';
+import { MISSION_STRUCTURE_ORDER } from './missionDefinition';
 import {
   createCompletedBoundaryVoxelState,
   projectBoundaryMission,
@@ -20,13 +21,8 @@ import {
 
 export const STRUCTURE_MISSION_ADAPTER_VERSION = 2;
 
-export const VOXEL_STRUCTURE_ORDER = [
-  'nucleus',
-  'ribosomes',
-  'mitochondria',
-  'chloroplasts',
-  'centralVacuole',
-] as const satisfies readonly PlaceableStructureId[];
+/** @deprecated Phase 4 proof alias; integrated code imports MISSION_STRUCTURE_ORDER directly. */
+export const VOXEL_STRUCTURE_ORDER = MISSION_STRUCTURE_ORDER;
 
 export type StructureMissionStage =
   'control-and-protein' | 'energy-and-photosynthesis' | 'water-storage' | 'complete';
