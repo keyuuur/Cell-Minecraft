@@ -1,5 +1,6 @@
 import { LEGACY_GAME_VERSION } from '../data/assignment';
 import { queueSubmission, queuedSubmissions, recordReceipt } from '../persistence/db';
+import { validSubmissionReceipt } from '../persistence/receiptValidation';
 import type { SaveEnvelope, SubmissionPayload, SubmissionReceipt } from '../types/game';
 
 export function payloadFromSave(
@@ -94,16 +95,6 @@ class SubmissionHttpError extends Error {
   }
 }
 
-function isReceipt(value: unknown): value is SubmissionReceipt {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const receipt = value as Partial<SubmissionReceipt>;
-  return (
-    typeof receipt.attemptId === 'string' &&
-    ['accepted', 'duplicate', 'rejected'].includes(receipt.status ?? '') &&
-    typeof receipt.serverTimestamp === 'string'
-  );
-}
-
 async function sendSubmission(payload: SubmissionPayload): Promise<SubmissionReceipt> {
   let response: Response;
   try {
@@ -122,7 +113,7 @@ async function sendSubmission(payload: SubmissionPayload): Promise<SubmissionRec
   } catch {
     throw new SubmissionHttpError(response.status === 429 || response.status >= 500);
   }
-  if (!isReceipt(raw) || raw.attemptId !== payload.attemptId) {
+  if (!validSubmissionReceipt(raw, payload.attemptId)) {
     throw new SubmissionHttpError(response.status === 429 || response.status >= 500);
   }
   if (!response.ok || !['accepted', 'duplicate'].includes(raw.status)) {

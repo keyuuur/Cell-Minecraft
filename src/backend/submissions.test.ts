@@ -25,7 +25,27 @@ const payload: SubmissionPayload = {
   early: true,
   timeout: false,
   activeTimeSeconds: 15,
-  objectives: {},
+  objectives: {
+    wallPanels: 0,
+    membranePanels: 0,
+    cytoplasm: false,
+    nucleus: false,
+    ribosomes: false,
+    mitochondria: false,
+    chloroplasts: false,
+    centralVacuole: false,
+    droughtDiagnosed: false,
+    droughtObserved: false,
+    recoveryRestored: false,
+    effectCellWall: false,
+    effectCellMembrane: false,
+    effectCytoplasm: false,
+    effectNucleus: false,
+    effectRibosomes: false,
+    effectMitochondria: false,
+    effectChloroplasts: false,
+    effectCentralVacuole: false,
+  },
   hintsUsed: {},
   isTest: true,
 };
@@ -57,6 +77,43 @@ describe('submission retry behavior', () => {
 
   it('keeps temporary service failures queued for replay', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(receiptResponse(503, 'SERVER_BUSY')));
+    await expect(submitOrQueue(payload)).resolves.toBeNull();
+    await expect(queuedSubmissions()).resolves.toHaveLength(1);
+  });
+
+  it.each([
+    {
+      attemptId: payload.attemptId,
+      status: 'accepted',
+      serverTimestamp: 'not-a-date',
+    },
+    {
+      attemptId: payload.attemptId,
+      status: 'accepted',
+      serverTimestamp: new Date().toISOString(),
+      errorCode: 'UNEXPECTED',
+    },
+    {
+      attemptId: payload.attemptId,
+      status: 'rejected',
+      serverTimestamp: new Date().toISOString(),
+    },
+    {
+      attemptId: payload.attemptId,
+      status: 'accepted',
+      serverTimestamp: new Date().toISOString(),
+      extra: true,
+    },
+  ])('keeps malformed or non-exact receipts queued for recovery', async (receipt) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(receipt), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
     await expect(submitOrQueue(payload)).resolves.toBeNull();
     await expect(queuedSubmissions()).resolves.toHaveLength(1);
   });

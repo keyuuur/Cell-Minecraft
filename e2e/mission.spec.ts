@@ -1,5 +1,10 @@
 import { expect, type Page, test } from '@playwright/test';
 
+// The development server compiles this route's full module graph on its first
+// request. Production startup has a separate timing gate; this suite allows a
+// bounded cold-compiler window without accepting retries.
+test.describe.configure({ timeout: 60_000 });
+
 type Box = { x: number; y: number; width: number; height: number };
 
 const overlaps = (a: Box, b: Box) =>

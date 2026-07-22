@@ -168,6 +168,23 @@ export interface PendingSubmission {
   lastError?: string;
 }
 
+export interface SubmissionLeaseV1 {
+  ownerId: string;
+  token: string;
+  expiresAt: number;
+}
+
+/** Persistence-only queue record for the integrated V2 browser contract. */
+export interface PendingSubmissionV2 {
+  contractVersion: 2;
+  payload: ClientSubmissionPayloadV2;
+  queuedAt: number;
+  attempts: number;
+  nextAttemptAt: number;
+  lastError?: string;
+  lease: SubmissionLeaseV1 | null;
+}
+
 export const VOXEL_MISSION_SNAPSHOT_VERSION = 1 as const;
 export const VOXEL_MISSION_TEMPLATE_ID = 'plant-cell-cutaway-v1' as const;
 

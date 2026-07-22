@@ -1,4 +1,3 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { ASSIGNMENT, LEGACY_GAME_VERSION, LEGACY_SAVE_SCHEMA_VERSION } from '../data/assignment';
 import type {
   PendingSubmission,
@@ -6,38 +5,15 @@ import type {
   SubmissionPayload,
   SubmissionReceipt,
 } from '../types/game';
+import {
+  assertQueueRecordsSafe,
+  validLegacyPendingSubmission,
+  validPendingSubmissionV2,
+} from './queueValidation';
+import { validSubmissionReceipt } from './receiptValidation';
+import { openCellGameDatabase } from './schema';
 
-interface CellGameDb extends DBSchema {
-  saves: {
-    key: string;
-    value: SaveEnvelope;
-  };
-  submissionQueue: {
-    key: string;
-    value: PendingSubmission;
-  };
-  receipts: {
-    key: string;
-    value: SubmissionReceipt;
-  };
-}
-
-let databasePromise: Promise<IDBPDatabase<CellGameDb>> | null = null;
-
-function database(): Promise<IDBPDatabase<CellGameDb>> {
-  if (!databasePromise) {
-    databasePromise = openDB<CellGameDb>('build-a-living-cell', 1, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains('saves')) db.createObjectStore('saves');
-        if (!db.objectStoreNames.contains('submissionQueue')) {
-          db.createObjectStore('submissionQueue');
-        }
-        if (!db.objectStoreNames.contains('receipts')) db.createObjectStore('receipts');
-      },
-    });
-  }
-  return databasePromise;
-}
+const database = openCellGameDatabase;
 
 export const ACTIVE_SAVE_KEY = `${ASSIGNMENT.id}:active`;
 
@@ -191,9 +167,14 @@ export async function clearLocalData(): Promise<void> {
 
 export async function clearAllLocalDataForTests(): Promise<void> {
   const db = await database();
-  const transaction = db.transaction(['saves', 'submissionQueue', 'receipts'], 'readwrite');
+  const transaction = db.transaction(
+    ['saves', 'attempts', 'meta', 'submissionQueue', 'receipts'],
+    'readwrite',
+  );
   await Promise.all([
     transaction.objectStore('saves').clear(),
+    transaction.objectStore('attempts').clear(),
+    transaction.objectStore('meta').clear(),
     transaction.objectStore('submissionQueue').clear(),
     transaction.objectStore('receipts').clear(),
     transaction.done,
@@ -233,12 +214,33 @@ export async function queueSubmission(entry: PendingSubmission): Promise<void> {
 }
 
 export async function queuedSubmissions(): Promise<PendingSubmission[]> {
-  return (await database()).getAll('submissionQueue');
+  const transaction = (await database()).transaction('submissionQueue', 'readonly');
+  const store = transaction.objectStore('submissionQueue');
+  const [keys, records] = await Promise.all([store.getAllKeys(), store.getAll()]);
+  assertQueueRecordsSafe(keys, records);
+  await transaction.done;
+  return records.filter(validLegacyPendingSubmission);
+}
+
+function classifyQueueRecordForDiagnostic(record: unknown): string {
+  if (validLegacyPendingSubmission(record)) return 'legacy-v1';
+  if (validPendingSubmissionV2(record)) return 'current-v2-queue';
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return 'corrupt-or-unsupported-queue';
+  }
+  const candidate = record as Record<string, unknown>;
+  if (candidate.contractVersion !== 2) return 'corrupt-or-unsupported-queue';
+  return 'corrupt-v2-queue';
 }
 
 export async function recordReceipt(receipt: SubmissionReceipt): Promise<void> {
+  if (!validSubmissionReceipt(receipt)) throw new Error('INVALID_RECEIPT');
   const db = await database();
   const transaction = db.transaction(['submissionQueue', 'receipts'], 'readwrite');
+  const queued = await transaction.objectStore('submissionQueue').get(receipt.attemptId);
+  if (queued !== undefined && !validLegacyPendingSubmission(queued)) {
+    throw new Error('CORRUPT_SUBMISSION_QUEUE');
+  }
   await transaction.objectStore('receipts').put(receipt, receipt.attemptId);
   await transaction.objectStore('submissionQueue').delete(receipt.attemptId);
   await transaction.done;
@@ -248,17 +250,30 @@ export async function exportDiagnostic(): Promise<string> {
   const db = await database();
   const save = await db.get('saves', ACTIVE_SAVE_KEY);
   const queue = await db.getAll('submissionQueue');
+  let saveSummary: Record<string, unknown>;
+  try {
+    if (save === undefined) {
+      saveSummary = { classification: 'none' };
+    } else {
+      validateStoredSave(save);
+      const migrated = migrateSave(save);
+      saveSummary = {
+        classification: 'legacy-v2',
+        schemaVersion: migrated.schemaVersion,
+        gameVersion: migrated.gameVersion,
+        activeElapsedMs: migrated.activeElapsedMs,
+        submissionStatus: migrated.submissionStatus,
+      };
+    }
+  } catch {
+    saveSummary = { classification: 'corrupt-legacy-save' };
+  }
   const safe = {
     generatedAt: new Date().toISOString(),
-    schemaVersion: save?.schemaVersion,
-    gameVersion: save?.gameVersion,
-    assignmentId: save?.assignmentId,
-    attemptId: save?.attemptId,
-    activeElapsedMs: save?.activeElapsedMs,
-    mission: save?.mission,
-    score: save?.score,
-    submissionStatus: save?.submissionStatus,
-    pendingAttemptIds: queue.map((item) => item.payload.attemptId),
+    save: saveSummary,
+    queue: queue.map((record) => ({
+      classification: classifyQueueRecordForDiagnostic(record),
+    })),
   };
   return JSON.stringify(safe, null, 2);
 }

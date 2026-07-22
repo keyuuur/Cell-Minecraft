@@ -1116,6 +1116,7 @@ export function canonicalizeForwardedSubmissionPayloadV2(
   payload: ForwardedSubmissionContentV2,
 ): string {
   const objectives = Object.fromEntries(objectiveKeys.map((key) => [key, payload.objectives[key]]));
+  const firstName = payload.firstName.normalize('NFKC').trim().replace(/\s+/g, ' ');
   return JSON.stringify({
     contractVersion: payload.contractVersion,
     assignmentId: payload.assignmentId,
@@ -1123,7 +1124,7 @@ export function canonicalizeForwardedSubmissionPayloadV2(
     gameVersion: payload.gameVersion,
     attemptId: payload.attemptId,
     sessionId: payload.sessionId,
-    firstName: payload.firstName.trim(),
+    firstName,
     lastInitial: payload.lastInitial.toUpperCase(),
     period: payload.period,
     completed: payload.completed,
