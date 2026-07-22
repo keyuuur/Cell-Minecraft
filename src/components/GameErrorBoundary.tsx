@@ -2,6 +2,7 @@ import { Component, type ReactNode } from 'react';
 
 interface GameErrorBoundaryProps {
   children: ReactNode;
+  onError?: () => void;
 }
 
 interface GameErrorBoundaryState {
@@ -17,6 +18,7 @@ export class GameErrorBoundary extends Component<GameErrorBoundaryProps, GameErr
 
   componentDidCatch(): void {
     // Student identity and save contents are intentionally never written to the console.
+    this.props.onError?.();
   }
 
   render() {
@@ -26,7 +28,8 @@ export class GameErrorBoundary extends Component<GameErrorBoundaryProps, GameErr
           <section className="modal-panel" role="alert">
             <h2>The 3D scene paused safely</h2>
             <p>
-              Your progress is stored on this device. Reload to restore the construction chamber.
+              Controls and the active timer stopped. Reload to restore the last confirmed local
+              save; if the screen had not shown Saved, ask your teacher before closing it.
             </p>
             <button
               className="primary-button"

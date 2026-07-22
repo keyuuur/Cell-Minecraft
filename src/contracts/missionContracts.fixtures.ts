@@ -102,6 +102,7 @@ export function createCompletedVoxelMissionFixture(
     },
     completion: { completionLocked: true, completed: true, practice: false },
     lastFeedback: 'The cell is stable again.',
+    stageTimestamps: { ...snapshot.stageTimestamps, stable: 1_700_000_000_000 },
   };
 }
 

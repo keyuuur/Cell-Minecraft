@@ -43,6 +43,7 @@ import {
   MISSION_SUPPLY_CELLS,
   missionWorldOwnerAt,
   syncMissionWorld,
+  WATER_STATION_CELL,
 } from '../voxel/missionWorld';
 import { movePlayer } from '../voxel/PlayerMotor';
 import { raycastVoxel, type VoxelRaycastHit } from '../voxel/raycastVoxel';
@@ -64,6 +65,14 @@ const MISSION_MODULE_IDS_FOR_HOTBAR: Partial<Record<string, MissionModuleId>> = 
   Digit7: 'chloroplasts',
   Digit8: 'centralVacuole',
 };
+
+const allInternalEvidenceForScene = (snapshot: Readonly<VoxelMissionSnapshotV1>): boolean =>
+  snapshot.boundary.functionEvidence.cellWall &&
+  snapshot.boundary.functionEvidence.cellMembrane &&
+  snapshot.boundary.functionEvidence.cytoplasm &&
+  MISSION_STRUCTURE_ORDER.every(
+    (id) => Boolean(snapshot.placements[id]) && snapshot.functionEvidence[id] === true,
+  );
 
 export interface VoxelMissionDiagnostics {
   world: '24x12x24';
@@ -103,6 +112,11 @@ export interface VoxelMissionSceneSnapshot {
 export interface VoxelMissionSceneCallbacks {
   onSnapshot: (snapshot: VoxelMissionSceneSnapshot) => void;
   onContextLost: () => void;
+}
+
+export interface VoxelMissionSceneOptions {
+  initialSnapshot?: VoxelMissionSnapshotV1;
+  reducedMotion?: boolean;
 }
 
 interface PrefabVisual {
@@ -247,6 +261,7 @@ export class VoxelMissionScene {
   private readonly cytoplasmFill: Mesh;
   private readonly wallEvidenceRoot: TransformNode;
   private readonly membraneEvidenceRoot: TransformNode;
+  private readonly plantIndicatorRoot: TransformNode;
   private readonly reducedMotion: boolean;
   private currentTarget: MissionTarget | null = null;
   private currentHit: VoxelRaycastHit | null = null;
@@ -273,11 +288,16 @@ export class VoxelMissionScene {
   private lastFpsUpdate = 0;
   private fps = 0;
 
-  constructor(canvas: HTMLCanvasElement, callbacks: VoxelMissionSceneCallbacks) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    callbacks: VoxelMissionSceneCallbacks,
+    options: VoxelMissionSceneOptions = {},
+  ) {
     this.canvas = canvas;
     this.callbacks = callbacks;
-    this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const initial = createInitialVoxelMissionSnapshot();
+    this.reducedMotion =
+      options.reducedMotion ?? window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const initial = options.initialSnapshot ?? createInitialVoxelMissionSnapshot();
     this.renderWorld = createMissionWorld(initial, false);
     this.collisionWorld = createMissionWorld(initial, true);
     this.runtime = new VoxelMissionRuntime(this.collisionWorld, initial);
@@ -344,12 +364,13 @@ export class VoxelMissionScene {
     this.cytoplasmFill = this.createCytoplasm();
     this.wallEvidenceRoot = this.createBoundaryEvidence('cellWall');
     this.membraneEvidenceRoot = this.createBoundaryEvidence('cellMembrane');
+    this.plantIndicatorRoot = this.createPlantIndicator();
     this.currentViewModel = selectMissionViewModel(initial, null);
     this.reconcileSnapshot();
     this.attachInput();
     canvas.addEventListener('webglcontextlost', this.handleContextLost, { passive: false });
     this.engine.runRenderLoop(() => this.render());
-    this.recenter();
+    if (!options.initialSnapshot) this.recenter();
     this.emitSnapshot();
   }
 
@@ -408,6 +429,8 @@ export class VoxelMissionScene {
           [id, STRUCTURE_LABELS[id as MissionModuleId], point] as [string, string, VoxelPoint],
       ),
       ['cytoplasm', 'Cytoplasm control', CYTOPLASM_CONTROL_CELL],
+      ['waterStation', 'Water availability station', WATER_STATION_CELL],
+      ['plantStatus', 'Plant condition: firm', { x: 7, y: 1, z: 8 }],
     ];
     labels.forEach(([id, label, point]) => {
       const texture = new DynamicTexture(
@@ -433,6 +456,38 @@ export class VoxelMissionScene {
       this.supplyLabels.set(id, { texture, material, mesh, lastText: '' });
       this.drawLabel(id, label);
     });
+  }
+
+  private createPlantIndicator(): TransformNode {
+    const root = new TransformNode('mission-plant-condition', this.scene);
+    root.position.set(7, 0, 8);
+    const stem = this.material('mission-plant-stem-material', '#39784a');
+    const leaf = this.pixelMaterial('mission-plant-leaf-material', [
+      '#4e9851',
+      '#78bd66',
+      '#2d653c',
+    ]);
+    this.addPart(
+      root,
+      'mission-plant-stem',
+      { width: 0.35, height: 2.8, depth: 0.35 },
+      new Vector3(0, 1.4, 0),
+      stem,
+    );
+    for (const [index, [x, y, z]] of [
+      [-0.65, 1.45, 0],
+      [0.65, 2.05, 0],
+      [0, 2.65, 0],
+    ].entries()) {
+      this.addPart(
+        root,
+        `mission-plant-leaf-${index}`,
+        { width: 1.15, height: 0.38, depth: 0.72 },
+        new Vector3(x, y, z),
+        leaf,
+      );
+    }
+    return root;
   }
 
   private drawLabel(id: string, text: string): void {
@@ -718,9 +773,16 @@ export class VoxelMissionScene {
         continue;
       }
       const key = `${anchor.x},${anchor.y},${anchor.z}:${observed}`;
-      if (existing?.key === key) continue;
-      existing?.root.dispose(false, false);
-      this.prefabVisuals.set(id, this.createPrefabVisual(id, anchor, observed));
+      if (existing?.key !== key) {
+        existing?.root.dispose(false, false);
+        this.prefabVisuals.set(id, this.createPrefabVisual(id, anchor, observed));
+      }
+      if (id === 'centralVacuole') {
+        const visual = this.prefabVisuals.get(id);
+        const depleted =
+          snapshot.homeostasis.droughtStarted && !snapshot.homeostasis.recoveryRestored;
+        visual?.root.scaling.set(1, depleted ? 0.48 : 1, 1);
+      }
     }
   }
 
@@ -758,19 +820,34 @@ export class VoxelMissionScene {
 
   private reconcileLabels(snapshot: Readonly<VoxelMissionSnapshotV1>): void {
     const active = new Set(activeMissionSupplies(snapshot));
+    const depleted = snapshot.homeostasis.droughtStarted && !snapshot.homeostasis.recoveryRestored;
     for (const [rawId, visual] of this.supplyLabels) {
-      const id = rawId as MissionModuleId | 'cytoplasm';
-      const base = id === 'cytoplasm' ? 'Cytoplasm control' : STRUCTURE_LABELS[id];
+      const id = rawId as MissionModuleId | 'cytoplasm' | 'waterStation' | 'plantStatus';
+      const base =
+        id === 'cytoplasm'
+          ? 'Cytoplasm control'
+          : id === 'waterStation'
+            ? 'Water availability station'
+            : id === 'plantStatus'
+              ? `Plant condition: ${depleted ? 'wilted' : 'firm'}`
+              : STRUCTURE_LABELS[id];
       const isActive =
         id === 'cytoplasm'
           ? snapshot.boundary.wallAnchors.length === 6 &&
             snapshot.boundary.membraneAnchors.length === 6 &&
             !snapshot.boundary.functionEvidence.cytoplasm
-          : active.has(id);
+          : id === 'waterStation'
+            ? (allInternalEvidenceForScene(snapshot) && !snapshot.homeostasis.droughtStarted) ||
+              (snapshot.homeostasis.droughtObserved && !snapshot.homeostasis.recoveryRestored)
+            : id === 'plantStatus'
+              ? depleted || snapshot.homeostasis.recoveryRestored
+              : active.has(id);
       this.drawLabel(rawId, isActive ? `NEXT: ${base}` : base);
       visual.material.emissiveColor = Color3.FromHexString(isActive ? '#f4d35e' : '#ffffff');
       visual.mesh.scaling.setAll(isActive ? 1.12 : 1);
     }
+    this.plantIndicatorRoot.rotation.z = depleted ? 0.62 : 0;
+    this.plantIndicatorRoot.scaling.set(1, depleted ? 0.72 : 1, 1);
   }
 
   private reconcileTool(snapshot: Readonly<VoxelMissionSnapshotV1>): void {
@@ -1003,6 +1080,13 @@ export class VoxelMissionScene {
         distance: hit.distance,
       };
     }
+    if (owner.kind === 'water-station') {
+      return {
+        kind: 'waterStation',
+        snapshotRevision: snapshot.revision,
+        distance: hit.distance,
+      };
+    }
     if (owner.kind === 'boundary') {
       return {
         kind: 'boundary',
@@ -1080,6 +1164,9 @@ export class VoxelMissionScene {
     }
     if (target.kind === 'structure') {
       return `${STRUCTURE_LABELS[target.structureId].toUpperCase()} · ${this.currentViewModel.primaryActionLabel.toUpperCase()}`;
+    }
+    if (target.kind === 'waterStation') {
+      return `WATER AVAILABILITY STATION · ${this.currentViewModel.primaryActionLabel.toUpperCase()}`;
     }
     return this.placementValid
       ? `VALID ${STRUCTURE_LABELS[snapshot.selectedHotbarItem as MissionModuleId].toUpperCase()} LOCATION · PLACE`
@@ -1248,6 +1335,13 @@ export class VoxelMissionScene {
     }
     const supply = activeMissionSupplies(snapshot)[0];
     if (supply) return MISSION_SUPPLY_CELLS[supply];
+    if (
+      allInternalEvidenceForScene(snapshot) &&
+      (!snapshot.homeostasis.droughtStarted ||
+        (snapshot.homeostasis.droughtObserved && !snapshot.homeostasis.recoveryRestored))
+    ) {
+      return WATER_STATION_CELL;
+    }
     const vacuole = snapshot.placements.centralVacuole;
     return vacuole ? { x: vacuole.x + 1, y: 2, z: vacuole.z + 1 } : null;
   }
@@ -1339,6 +1433,17 @@ export class VoxelMissionScene {
     if (this.paused || this.stopped) return;
     if (!this.overview) {
       this.clearInput();
+      const before = this.runtime.peek().revision;
+      this.runtime.dispatch(
+        { type: 'overview', snapshotRevision: this.runtime.peek().revision },
+        null,
+      );
+      if (this.runtime.peek().revision !== before) {
+        syncMissionWorld(this.renderWorld, this.runtime.peek() as VoxelMissionSnapshotV1, false);
+        syncMissionWorld(this.collisionWorld, this.runtime.peek() as VoxelMissionSnapshotV1, true);
+        this.reconcileSnapshot();
+        this.updateTarget();
+      }
       this.overviewReturn = {
         position: this.camera.position.clone(),
         rotation: this.camera.rotation.clone(),

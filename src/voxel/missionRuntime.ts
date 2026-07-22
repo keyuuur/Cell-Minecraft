@@ -32,7 +32,12 @@ import {
 } from './boundaryAdapter';
 import { isSolidVoxel, VOXEL_PALETTE_VERSION } from './blocks';
 import { MISSION_STRUCTURE_ORDER } from './missionDefinition';
-import { createMissionWorld, CYTOPLASM_CONTROL_CELL, MISSION_SUPPLY_CELLS } from './missionWorld';
+import {
+  createMissionWorld,
+  CYTOPLASM_CONTROL_CELL,
+  MISSION_SUPPLY_CELLS,
+  WATER_STATION_CELL,
+} from './missionWorld';
 import type { VoxelPoint } from './types';
 import type { VoxelWorld } from './VoxelWorld';
 
@@ -125,7 +130,7 @@ export function voxelMissionStage(snapshot: VoxelMissionSnapshotV1): MissionStag
     return 'water-storage';
   }
   if (!snapshot.homeostasis.droughtStarted) return 'drought-diagnosis';
-  if (!snapshot.homeostasis.recoveryRestored) return 'recovery';
+  if (!snapshot.homeostasis.recoveryRestored || !snapshot.stageTimestamps.stable) return 'recovery';
   return 'stable';
 }
 
@@ -137,7 +142,16 @@ function moduleInTransit(snapshot: VoxelMissionSnapshotV1, id: MissionModuleId):
 }
 
 export function activeMissionSupplies(snapshot: VoxelMissionSnapshotV1): MissionModuleId[] {
-  if (snapshot.correction.removedTarget || snapshot.activeModulePickups.length > 0) return [];
+  if (
+    snapshot.correction.removedTarget ||
+    snapshot.activeModulePickups.length > 0 ||
+    MISSION_MODULE_IDS.some((id) => snapshot.moduleInventory[id] > 0) ||
+    MISSION_STRUCTURE_ORDER.some(
+      (id) => Boolean(snapshot.placements[id]) && snapshot.functionEvidence[id] !== true,
+    )
+  ) {
+    return [];
+  }
   if (snapshot.boundary.wallAnchors.length < 6 || !snapshot.boundary.functionEvidence.cellWall) {
     return snapshot.depotInventory.cellWall > 0 && !moduleInTransit(snapshot, 'cellWall')
       ? ['cellWall']
@@ -359,11 +373,38 @@ function inspectTarget(
   );
 }
 
-function activateCytoplasm(
+function interactWithTarget(
   snapshot: VoxelMissionSnapshotV1,
   target: MissionTarget,
   world: VoxelWorld,
 ): VoxelMissionSnapshotV1 {
+  if (target.kind === 'waterStation') {
+    if (
+      !allInternalEvidence(snapshot) ||
+      !snapshot.homeostasis.vacuoleHydratedObserved ||
+      snapshot.homeostasis.droughtStarted ||
+      snapshot.correction.removedTarget
+    ) {
+      return snapshot;
+    }
+    const next = cloneVoxelMissionSnapshot(snapshot);
+    next.homeostasis = {
+      ...next.homeostasis,
+      waterAvailable: false,
+      droughtStarted: true,
+      droughtDiagnosed: false,
+      droughtObserved: false,
+      recoveryRestored: false,
+    };
+    next.completion = { ...next.completion, completed: false };
+    next.stageTimestamps = { ...next.stageTimestamps, 'drought-diagnosis': Date.now() };
+    return commitTransition(
+      snapshot,
+      next,
+      world,
+      'External water availability dropped. Open Overview to diagnose the visible system change.',
+    );
+  }
   if (target.kind !== 'supply' || target.structureId !== 'cytoplasm') return snapshot;
   const boundary = establishBoundaryCytoplasm(snapshot.boundary);
   if (!boundary) return snapshot;
@@ -377,6 +418,65 @@ function activateCytoplasm(
   );
 }
 
+function observeSystemOverview(
+  snapshot: VoxelMissionSnapshotV1,
+  world: VoxelWorld,
+): VoxelMissionSnapshotV1 {
+  if (snapshot.homeostasis.droughtStarted && !snapshot.homeostasis.droughtObserved) {
+    const next = cloneVoxelMissionSnapshot(snapshot);
+    next.homeostasis.droughtObserved = true;
+    next.homeostasis.droughtDiagnosed = true;
+    return commitTransition(
+      snapshot,
+      next,
+      world,
+      'Overview diagnosis: limited water shrank the vacuole, reduced turgor pressure, and wilted the plant.',
+    );
+  }
+  if (
+    snapshot.homeostasis.recoveryRestored &&
+    !snapshot.stageTimestamps.stable &&
+    allInternalEvidence(snapshot) &&
+    !snapshot.correction.removedTarget
+  ) {
+    const next = cloneVoxelMissionSnapshot(snapshot);
+    next.stageTimestamps = { ...next.stageTimestamps, stable: Date.now() };
+    return commitTransition(
+      snapshot,
+      next,
+      world,
+      'Recovery verified: the vacuole refilled, turgor pressure was restored, and the plant became firm again.',
+    );
+  }
+  return snapshot;
+}
+
+function restoreExternalWater(
+  snapshot: VoxelMissionSnapshotV1,
+  target: MissionTarget,
+  world: VoxelWorld,
+): VoxelMissionSnapshotV1 {
+  if (
+    target.kind !== 'waterStation' ||
+    !snapshot.homeostasis.droughtStarted ||
+    !snapshot.homeostasis.droughtObserved ||
+    !snapshot.homeostasis.droughtDiagnosed ||
+    snapshot.homeostasis.recoveryRestored
+  ) {
+    return snapshot;
+  }
+  const next = cloneVoxelMissionSnapshot(snapshot);
+  next.homeostasis.waterAvailable = true;
+  next.homeostasis.recoveryRestored = true;
+  next.stageTimestamps = { ...next.stageTimestamps, recovery: Date.now() };
+  return commitTransition(
+    snapshot,
+    next,
+    world,
+    'External water availability was restored. Open Overview to verify the cell and plant recovered.',
+  );
+}
+
 function supportedEmptyCells(snapshot: VoxelMissionSnapshotV1): VoxelPoint[] {
   const world = createMissionWorld(snapshot, true);
   const candidates: VoxelPoint[] = [];
@@ -387,7 +487,8 @@ function supportedEmptyCells(snapshot: VoxelMissionSnapshotV1): VoxelPoint[] {
       if (!isSolidVoxel(world.getOrAir({ x, y: 0, z }))) continue;
       if (
         Object.values(MISSION_SUPPLY_CELLS).some((supply) => supply.x === x && supply.z === z) ||
-        (CYTOPLASM_CONTROL_CELL.x === x && CYTOPLASM_CONTROL_CELL.z === z)
+        (CYTOPLASM_CONTROL_CELL.x === x && CYTOPLASM_CONTROL_CELL.z === z) ||
+        (WATER_STATION_CELL.x === x && WATER_STATION_CELL.z === z)
       ) {
         continue;
       }
@@ -483,6 +584,7 @@ function removeMissionModule(
   }
 
   next.correction.removedTarget = removedTarget;
+  next.completion = { ...next.completion, completed: false };
   const recoveryCell = (options.recoveryCell ?? findNearestReachableRecoveryCell)(
     next,
     removedFrom,
@@ -517,8 +619,12 @@ export function executeMissionCommand(
   world: VoxelWorld,
   removalOptions: RemovalRecoveryOptions = {},
 ): VoxelMissionSnapshotV1 {
+  if (!validateMissionCommand(command, snapshot.revision)) {
+    return snapshot;
+  }
+  if (snapshot.completion.completionLocked) return snapshot;
+  if (command.type === 'overview') return observeSystemOverview(snapshot, world);
   if (
-    !validateMissionCommand(command, snapshot.revision) ||
     !currentTarget ||
     !validateMissionTarget(currentTarget) ||
     currentTarget.snapshotRevision !== snapshot.revision
@@ -541,12 +647,11 @@ export function executeMissionCommand(
     case 'inspect':
       return inspectTarget(snapshot, currentTarget, world);
     case 'interact':
-      return activateCytoplasm(snapshot, currentTarget, world);
+      return interactWithTarget(snapshot, currentTarget, world);
     case 'remove':
       return removeMissionModule(snapshot, currentTarget, world, removalOptions);
-    case 'overview':
     case 'recover':
-      return snapshot;
+      return restoreExternalWater(snapshot, currentTarget, world);
   }
 }
 
@@ -614,9 +719,23 @@ function objectiveFor(snapshot: VoxelMissionSnapshotV1): string {
   if (supplies.length > 0) {
     return `Choose ${supplies.map((id) => STRUCTURE_LABELS[id]).join(' or ')} and mine its supply crate.`;
   }
-  return allInternalEvidence(snapshot)
-    ? 'Phase 4.5 checkpoint ready: remove one structure, recover it, rebuild, and reinspect.'
-    : 'Aim at the highlighted model target.';
+  if (!allInternalEvidence(snapshot)) return 'Aim at the highlighted model target.';
+  if (snapshot.completion.completionLocked)
+    return 'Stable cell verified. Your graded result is locked.';
+  if (snapshot.completion.practice) {
+    return 'Ungraded practice: explore, remove, rebuild, and reinspect the completed cell model.';
+  }
+  if (!snapshot.homeostasis.droughtStarted) {
+    return 'Aim at the Water Availability Station and begin the homeostasis challenge.';
+  }
+  if (!snapshot.homeostasis.droughtObserved) {
+    return 'Open Overview to diagnose the vacuole, turgor pressure, and plant response.';
+  }
+  if (!snapshot.homeostasis.recoveryRestored) {
+    return 'Aim at the Water Availability Station and restore external water.';
+  }
+  if (snapshot.stageTimestamps.stable) return 'Recovery verified. Submit the final graded result.';
+  return 'Open Overview to verify recovery and final stability.';
 }
 
 function actionForTarget(
@@ -668,7 +787,8 @@ function actionForTarget(
       primaryActionAccessibleLabel: `Remove ${STRUCTURE_LABELS[target.layer]} module`,
       primaryActionEnabled:
         snapshot.selectedHotbarItem === 'builder-pick' &&
-        snapshot.boundary.cytoplasm === 'empty' &&
+        allInternalEvidence(snapshot) &&
+        (!snapshot.homeostasis.droughtStarted || snapshot.completion.practice) &&
         !snapshot.correction.removedTarget,
     };
   }
@@ -688,6 +808,7 @@ function actionForTarget(
       primaryActionEnabled:
         snapshot.selectedHotbarItem === 'builder-pick' &&
         allInternalEvidence(snapshot) &&
+        (!snapshot.homeostasis.droughtStarted || snapshot.completion.practice) &&
         !snapshot.correction.removedTarget,
     };
   }
@@ -711,6 +832,33 @@ function actionForTarget(
       primaryActionAccessibleLabel: `Mine ${STRUCTURE_LABELS[target.structureId]} supply crate`,
       primaryActionEnabled: activeMissionSupplies(snapshot).includes(target.structureId),
     };
+  }
+  if (target.kind === 'waterStation') {
+    const readyToBegin =
+      allInternalEvidence(snapshot) &&
+      snapshot.homeostasis.vacuoleHydratedObserved &&
+      !snapshot.homeostasis.droughtStarted &&
+      !snapshot.correction.removedTarget;
+    const readyToRestore =
+      snapshot.homeostasis.droughtStarted &&
+      snapshot.homeostasis.droughtObserved &&
+      snapshot.homeostasis.droughtDiagnosed &&
+      !snapshot.homeostasis.recoveryRestored;
+    return readyToRestore
+      ? {
+          primaryVerb: 'recover',
+          primaryActionLabel: 'Restore water',
+          primaryActionAccessibleLabel: 'Restore external water availability',
+          primaryActionEnabled: true,
+        }
+      : {
+          primaryVerb: readyToBegin ? 'interact' : null,
+          primaryActionLabel: readyToBegin ? 'Begin challenge' : 'Water station inactive',
+          primaryActionAccessibleLabel: readyToBegin
+            ? 'Begin the reduced water availability challenge'
+            : 'The water availability station is not active yet',
+          primaryActionEnabled: readyToBegin,
+        };
   }
   return {
     primaryVerb: null,
@@ -782,14 +930,19 @@ export class VoxelMissionRuntime {
   }
 
   updatePlayer(player: VoxelMissionPlayerV1): VoxelMissionSnapshotV1 {
-    if (this.stopped) return this.current();
+    if (this.stopped || this.snapshot.completion.completionLocked) return this.current();
     this.snapshot = updateMissionPlayer(this.snapshot, player, this.contractWorld);
     return this.current();
   }
 
   /** Frame-path update after PlayerMotor has already resolved collision. */
   updatePlayerFrame(player: VoxelMissionPlayerV1): void {
-    if (this.stopped || !Object.values(player).every(Number.isFinite)) return;
+    if (
+      this.stopped ||
+      this.snapshot.completion.completionLocked ||
+      !Object.values(player).every(Number.isFinite)
+    )
+      return;
     this.snapshot = {
       ...this.snapshot,
       revision: this.snapshot.revision + 1,
@@ -798,7 +951,7 @@ export class VoxelMissionRuntime {
   }
 
   selectItem(item: VoxelMissionSnapshotV1['selectedHotbarItem']): VoxelMissionSnapshotV1 {
-    if (this.stopped) return this.current();
+    if (this.stopped || this.snapshot.completion.completionLocked) return this.current();
     this.snapshot = selectMissionHotbarItem(this.snapshot, item, this.contractWorld);
     return this.current();
   }

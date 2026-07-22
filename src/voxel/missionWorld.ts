@@ -30,10 +30,12 @@ export const MISSION_SUPPLY_CELLS: Readonly<Record<MissionModuleId, VoxelPoint>>
 };
 
 export const CYTOPLASM_CONTROL_CELL: VoxelPoint = { x: 0, y: 1, z: 1 };
+export const WATER_STATION_CELL: VoxelPoint = { x: 5, y: 1, z: 8 };
 
 export type MissionWorldOwner =
   | { kind: 'supply'; structureId: StructureId }
   | { kind: 'cytoplasm-control' }
+  | { kind: 'water-station' }
   | { kind: 'boundary'; layer: BoundaryLayer; sector: BoundarySector }
   | { kind: 'structure'; structureId: PlaceableStructureId };
 
@@ -82,6 +84,7 @@ function setStaticTemplate(world: VoxelWorld): void {
 function clearMissionDynamicCells(world: VoxelWorld): void {
   Object.values(MISSION_SUPPLY_CELLS).forEach((cell) => world.set(cell, VoxelBlock.Air));
   world.set(CYTOPLASM_CONTROL_CELL, VoxelBlock.Air);
+  world.set(WATER_STATION_CELL, VoxelBlock.Air);
   for (const sector of BOUNDARY_SECTORS) {
     [...sector.wallCells, ...sector.membraneCells].forEach((cell) =>
       world.set(cell, VoxelBlock.Air),
@@ -113,6 +116,7 @@ export function syncMissionWorld(
     if (snapshot.depotInventory[id] > 0) world.set(cell, supplyBlock(id));
   }
   world.set(CYTOPLASM_CONTROL_CELL, VoxelBlock.ModelControl);
+  world.set(WATER_STATION_CELL, VoxelBlock.ModelControl);
   for (const sector of BOUNDARY_SECTORS) {
     if (snapshot.boundary.wallAnchors.includes(sector.id)) {
       sector.wallCells.forEach((cell) => world.set(cell, VoxelBlock.CellWall));
@@ -146,6 +150,9 @@ export function missionWorldOwnerAt(
 ): MissionWorldOwner | null {
   if (voxelKey(cell) === voxelKey(CYTOPLASM_CONTROL_CELL)) {
     return { kind: 'cytoplasm-control' };
+  }
+  if (voxelKey(cell) === voxelKey(WATER_STATION_CELL)) {
+    return { kind: 'water-station' };
   }
   for (const [rawId, supplyCell] of Object.entries(MISSION_SUPPLY_CELLS)) {
     const id = rawId as MissionModuleId;

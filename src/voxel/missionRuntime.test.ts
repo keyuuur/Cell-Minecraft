@@ -104,6 +104,10 @@ function structureTarget(
   return { kind: 'structure', structureId, snapshotRevision: snapshot.revision, distance: 2 };
 }
 
+function waterTarget(snapshot: VoxelMissionSnapshotV1): MissionTarget {
+  return { kind: 'waterStation', snapshotRevision: snapshot.revision, distance: 2 };
+}
+
 function apply(
   snapshot: VoxelMissionSnapshotV1,
   type: MissionCommand['type'],
@@ -284,7 +288,81 @@ describe('integrated voxel mission runtime', () => {
     expect(snapshot.boundary.functionEvidence.cytoplasm).toBe(true);
     expect(MISSION_STRUCTURE_ORDER.every((id) => snapshot.functionEvidence[id])).toBe(true);
     expect(scoreVoxelMissionSnapshot(snapshot, world).total).toBe(80);
-    expect(selectMissionViewModel(snapshot, null).objective).toContain('remove one structure');
+    expect(selectMissionViewModel(snapshot, null).objective).toContain(
+      'Water Availability Station',
+    );
+  });
+
+  it('runs the visible water challenge through Overview diagnosis and ray-targeted recovery', () => {
+    let snapshot = completePhase45();
+    const checkpointScore = scoreVoxelMissionSnapshot(
+      snapshot,
+      createMissionWorld(snapshot, true),
+    ).total;
+    expect(checkpointScore).toBe(80);
+
+    snapshot = apply(snapshot, 'interact', waterTarget(snapshot));
+    expect(snapshot.homeostasis).toMatchObject({
+      waterAvailable: false,
+      droughtStarted: true,
+      droughtDiagnosed: false,
+      droughtObserved: false,
+      recoveryRestored: false,
+    });
+    expect(selectMissionViewModel(snapshot, null).objective).toContain('Open Overview');
+
+    snapshot = apply(snapshot, 'overview', null);
+    expect(snapshot.homeostasis).toMatchObject({
+      droughtDiagnosed: true,
+      droughtObserved: true,
+    });
+    expect(selectMissionViewModel(snapshot, waterTarget(snapshot))).toMatchObject({
+      primaryVerb: 'recover',
+      primaryActionEnabled: true,
+    });
+
+    snapshot = apply(snapshot, 'recover', waterTarget(snapshot));
+    expect(snapshot.homeostasis).toMatchObject({
+      waterAvailable: true,
+      recoveryRestored: true,
+    });
+    expect(scoreVoxelMissionSnapshot(snapshot, createMissionWorld(snapshot, true)).total).toBe(95);
+
+    snapshot = apply(snapshot, 'overview', null);
+    expect(snapshot.stageTimestamps.stable).toEqual(expect.any(Number));
+    expect(snapshot.completion).toEqual({
+      completionLocked: false,
+      completed: false,
+      practice: false,
+    });
+    expect(selectMissionViewModel(snapshot, null).objective).toContain('Submit');
+    expect(validateVoxelMissionSnapshot(snapshot, createMissionWorld(snapshot, true))).toBe(true);
+  });
+
+  it('rejects all mission and player mutations after completion is locked', () => {
+    const base = createPhase4VoxelMissionFixture();
+    const locked: VoxelMissionSnapshotV1 = {
+      ...base,
+      revision: base.revision + 1,
+      homeostasis: {
+        waterAvailable: true,
+        vacuoleHydratedObserved: true,
+        droughtStarted: true,
+        droughtDiagnosed: true,
+        droughtObserved: true,
+        recoveryRestored: true,
+      },
+      completion: { completionLocked: true, completed: true, practice: false },
+      stageTimestamps: { ...base.stageTimestamps, stable: Date.now() },
+    };
+    const world = createMissionWorld(locked, true);
+    const runtime = new VoxelMissionRuntime(world, locked);
+    const before = runtime.current();
+    runtime.dispatch(command(before, 'remove'), structureTarget(before, 'nucleus'));
+    runtime.selectItem('nucleus');
+    runtime.updatePlayer({ ...before.player, z: before.player.z - 2 });
+    runtime.updatePlayerFrame({ ...before.player, x: before.player.x + 1 });
+    expect(runtime.current()).toEqual(before);
   });
 
   it('rejects reserved, overlapping, and player-entrapping placement without mutation', () => {

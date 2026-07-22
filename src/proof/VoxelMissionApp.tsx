@@ -1,13 +1,23 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { STRUCTURE_LABELS } from '../data/assignment';
-import type { MissionHotbarItemId, MissionModuleId, PlaceableStructureId } from '../types/game';
+import { ASSIGNMENT, STRUCTURE_LABELS } from '../data/assignment';
+import type { SaveStatus } from '../persistence/v3';
+import type {
+  AccessibilitySettings,
+  ControlProfile,
+  MissionHotbarItemId,
+  MissionModuleId,
+  PlaceableStructureId,
+  ScoreBreakdown,
+  VoxelMissionSnapshotV1,
+} from '../types/game';
 import { MISSION_STRUCTURE_ORDER } from '../voxel/missionDefinition';
 import {
   createInitialVoxelMissionSnapshot,
@@ -35,39 +45,112 @@ const HOTBAR: Array<{
   { item: null, label: 'Reserved', icon: 'X' },
 ];
 
-const initialMission = createInitialVoxelMissionSnapshot();
-const initialSnapshot: VoxelMissionSceneSnapshot = {
-  mission: initialMission,
-  target: null,
-  targetLabel: '',
-  viewModel: selectMissionViewModel(initialMission, null),
-  score: 0,
-  fps: 0,
-  diagnostics: {
-    world: '24x12x24',
-    revision: 0,
-    playerCell: '0,1,10',
-    playerPosition: '0.000,0.500,10.000',
-    recenterCell: 'none',
-    recenterStage: 'normal',
-    targetKind: 'none',
-    targetCell: 'none',
-    targetFace: 'none',
-    placementValid: false,
-    pickupsActive: 0,
-    prefabCount: 0,
-    regionMeshes: 0,
-    totalRegionRebuilds: 0,
-    actionHeld: false,
-    actionProgress: 0,
-    paused: false,
-    overview: false,
-    contextLost: false,
-    cytoplasmSolidCells: 0,
-    storageWrites: 0,
-    apiRequests: 0,
-  },
-};
+function sceneSnapshotFor(mission: VoxelMissionSnapshotV1): VoxelMissionSceneSnapshot {
+  return {
+    mission,
+    target: null,
+    targetLabel: '',
+    viewModel: selectMissionViewModel(mission, null),
+    score: 0,
+    fps: 0,
+    diagnostics: {
+      world: '24x12x24',
+      revision: 0,
+      playerCell: '0,1,10',
+      playerPosition: '0.000,0.500,10.000',
+      recenterCell: 'none',
+      recenterStage: 'normal',
+      targetKind: 'none',
+      targetCell: 'none',
+      targetFace: 'none',
+      placementValid: false,
+      pickupsActive: 0,
+      prefabCount: 0,
+      regionMeshes: 0,
+      totalRegionRebuilds: 0,
+      actionHeld: false,
+      actionProgress: 0,
+      paused: false,
+      overview: false,
+      contextLost: false,
+      cytoplasmSolidCells: 0,
+      storageWrites: 0,
+      apiRequests: 0,
+    },
+  };
+}
+
+export interface VoxelMissionAppProps {
+  mode?: 'proof' | 'classroom';
+  initialMission?: VoxelMissionSnapshotV1;
+  controls?: ControlProfile;
+  accessibility?: AccessibilitySettings;
+  activeElapsedMs?: number;
+  scoreBreakdown?: ScoreBreakdown;
+  saveStatus?: SaveStatus | null;
+  paused?: boolean;
+  finalizing?: boolean;
+  finalizationError?: string;
+  onMissionSnapshot?: (mission: VoxelMissionSnapshotV1) => void;
+  onPauseChange?: (paused: boolean) => void;
+  onUseHint?: (level: 1 | 2 | 3) => void;
+  onSubmit?: (outcome: 'complete' | 'early') => Promise<void> | void;
+  onRetryFinalization?: () => Promise<void> | void;
+  onReturnToResults?: () => void;
+  onContextLost?: () => void;
+}
+
+const SCORE_LABELS: Array<[keyof Omit<ScoreBreakdown, 'total'>, string, number]> = [
+  ['boundary', 'Boundary', 15],
+  ['requiredStructures', 'Required structures', 30],
+  ['placementContext', 'Placement and context', 15],
+  ['activationFunctions', 'Activation and functions', 20],
+  ['droughtRecovery', 'Drought recovery', 15],
+  ['finalStability', 'Final stability', 5],
+];
+
+function formatRemaining(activeElapsedMs: number): string {
+  const remaining = Math.max(0, ASSIGNMENT.durationSeconds - Math.floor(activeElapsedMs / 1000));
+  return `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
+}
+
+function saveStatusText(status: SaveStatus | null | undefined): string {
+  if (!status) return 'Preparing local save';
+  if (status.state === 'checking') return 'Checking local save';
+  if (status.state === 'dirty' || status.state === 'saving') return 'Saving locally…';
+  if (status.state === 'saved') {
+    return `Saved at ${new Date(status.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  return 'Unable to save safely';
+}
+
+function turgorDescription(mission: VoxelMissionSnapshotV1): string {
+  if (!mission.homeostasis.vacuoleHydratedObserved) return 'Not yet established';
+  if (mission.homeostasis.droughtStarted && !mission.homeostasis.recoveryRestored) {
+    return 'Less turgor pressure · shrunken vacuole · wilted plant';
+  }
+  if (mission.homeostasis.recoveryRestored) {
+    return 'Turgor pressure restored · refilled vacuole · firm plant again';
+  }
+  return 'More turgor pressure · full vacuole · firm plant';
+}
+
+function missionSemanticKey(mission: VoxelMissionSnapshotV1): string {
+  return JSON.stringify({
+    boundary: mission.boundary,
+    depotInventory: mission.depotInventory,
+    placements: mission.placements,
+    functionEvidence: mission.functionEvidence,
+    moduleInventory: mission.moduleInventory,
+    activeModulePickups: mission.activeModulePickups,
+    selectedHotbarItem: mission.selectedHotbarItem,
+    homeostasis: mission.homeostasis,
+    correction: mission.correction,
+    completion: mission.completion,
+    lastFeedback: mission.lastFeedback,
+    stageTimestamps: mission.stageTimestamps,
+  });
+}
 
 function MovementJoystick({
   disabled,
@@ -174,22 +257,70 @@ function recoveryLabel(snapshot: VoxelMissionSceneSnapshot): string {
   return recovery.kind === 'pickup' ? 'pickup' : 'inventory';
 }
 
-export default function VoxelMissionApp() {
+export default function VoxelMissionApp({
+  mode = 'proof',
+  initialMission = createInitialVoxelMissionSnapshot(),
+  controls = 'touch-only',
+  accessibility,
+  activeElapsedMs = 0,
+  scoreBreakdown,
+  saveStatus,
+  paused,
+  finalizing = false,
+  finalizationError = '',
+  onMissionSnapshot,
+  onPauseChange,
+  onUseHint,
+  onSubmit,
+  onRetryFinalization,
+  onReturnToResults,
+  onContextLost,
+}: VoxelMissionAppProps = {}) {
+  const classroom = mode === 'classroom';
+  const missionRootRef = useRef<HTMLElement>(null);
   const controllerRef = useRef<VoxelMissionController | null>(null);
   const suppressHeldClickRef = useRef(false);
-  const [snapshot, setSnapshot] = useState(initialSnapshot);
+  const pausedRef = useRef(paused ?? false);
+  const lastForwardedAtRef = useRef(0);
+  const lastSemanticKeyRef = useRef('');
+  const [snapshot, setSnapshot] = useState(() => sceneSnapshotFor(initialMission));
   const [contextLost, setContextLost] = useState(false);
+  const [gradeOpen, setGradeOpen] = useState(false);
+  const [earlyConfirm, setEarlyConfirm] = useState(false);
+  const [hintState, setHintState] = useState({ objective: '', level: 0 as 0 | 1 | 2 | 3 });
 
   const handleReady = useCallback((controller: VoxelMissionController | null) => {
     controllerRef.current = controller;
+    controller?.setPaused(pausedRef.current);
   }, []);
-  const handleSnapshot = useCallback((next: VoxelMissionSceneSnapshot) => {
-    setSnapshot(next);
-  }, []);
-  const handleContextLost = useCallback(() => setContextLost(true), []);
+  const handleSnapshot = useCallback(
+    (next: VoxelMissionSceneSnapshot) => {
+      setSnapshot(next);
+      if (!onMissionSnapshot) return;
+      const now = performance.now();
+      const semanticKey = missionSemanticKey(next.mission);
+      const semanticChanged = semanticKey !== lastSemanticKeyRef.current;
+      if (semanticChanged || now - lastForwardedAtRef.current >= 750) {
+        lastSemanticKeyRef.current = semanticKey;
+        lastForwardedAtRef.current = now;
+        onMissionSnapshot(next.mission);
+      }
+    },
+    [onMissionSnapshot],
+  );
+  const handleContextLost = useCallback(() => {
+    setContextLost(true);
+    onContextLost?.();
+  }, [onContextLost]);
   const handleJoystick = useCallback((x: number, z: number) => {
     controllerRef.current?.setJoystick(x, z);
   }, []);
+
+  useEffect(() => {
+    if (paused === undefined) return;
+    pausedRef.current = paused;
+    controllerRef.current?.setPaused(paused);
+  }, [paused]);
 
   const mission = snapshot.mission;
   const stage = voxelMissionStage(mission);
@@ -201,7 +332,20 @@ export default function VoxelMissionApp() {
     snapshot.target?.kind === 'voxel' &&
     mission.selectedHotbarItem !== 'builder-pick' &&
     !snapshot.diagnostics.placementValid;
+  const activeModal =
+    contextLost || snapshot.diagnostics.contextLost
+      ? 'context-loss'
+      : finalizationError
+        ? 'finalization-error'
+        : finalizing
+          ? 'finalizing'
+          : gradeOpen
+            ? 'grade'
+            : snapshot.diagnostics.paused
+              ? 'pause'
+              : null;
   const disabled =
+    Boolean(activeModal) ||
     snapshot.diagnostics.paused ||
     snapshot.diagnostics.overview ||
     contextLost ||
@@ -218,13 +362,150 @@ export default function VoxelMissionApp() {
     event.preventDefault();
     controllerRef.current?.setActionHeld(active);
   };
-  const togglePause = () => {
-    controllerRef.current?.setPaused(!snapshot.diagnostics.paused);
-  };
+  const togglePause = useCallback(() => {
+    if (
+      gradeOpen ||
+      finalizing ||
+      finalizationError ||
+      contextLost ||
+      snapshot.diagnostics.contextLost
+    )
+      return;
+    const next = !snapshot.diagnostics.paused;
+    controllerRef.current?.setPaused(next);
+    onPauseChange?.(next);
+  }, [contextLost, finalizationError, finalizing, gradeOpen, onPauseChange, snapshot.diagnostics]);
+  const openGrade = useCallback(() => {
+    if (finalizing || finalizationError || contextLost || snapshot.diagnostics.contextLost) return;
+    controllerRef.current?.setPaused(true);
+    onPauseChange?.(true);
+    setEarlyConfirm(false);
+    setGradeOpen(true);
+  }, [contextLost, finalizationError, finalizing, onPauseChange, snapshot.diagnostics.contextLost]);
+  const closeGrade = useCallback(() => {
+    setGradeOpen(false);
+    setEarlyConfirm(false);
+    controllerRef.current?.setPaused(false);
+    onPauseChange?.(false);
+  }, [onPauseChange]);
+
+  useEffect(() => {
+    const root = missionRootRef.current;
+    if (!root || !activeModal) return;
+    const modal = root.querySelector<HTMLElement>(`[data-mission-modal="${activeModal}"]`);
+    if (!modal) return;
+
+    const previousFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const isolated = Array.from(root.children)
+      .filter((child): child is HTMLElement => child instanceof HTMLElement && child !== modal)
+      .map((element) => ({
+        element,
+        inert: element.inert,
+        ariaHidden: element.getAttribute('aria-hidden'),
+      }));
+    for (const record of isolated) {
+      record.element.inert = true;
+      record.element.setAttribute('aria-hidden', 'true');
+    }
+
+    const focusable = () =>
+      Array.from(
+        modal.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hidden);
+    const focusFirst = () => {
+      const candidates = focusable();
+      const preferred = modal.querySelector<HTMLElement>('[autofocus]');
+      (preferred ?? candidates[0] ?? modal).focus();
+    };
+    if (!modal.contains(document.activeElement)) focusFirst();
+
+    const handleFocus = (event: FocusEvent) => {
+      if (!modal.contains(event.target as Node)) focusFirst();
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (activeModal === 'grade') {
+          event.preventDefault();
+          if (earlyConfirm) setEarlyConfirm(false);
+          else closeGrade();
+        } else if (activeModal === 'pause') {
+          event.preventDefault();
+          togglePause();
+        }
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const candidates = focusable();
+      if (candidates.length === 0) {
+        event.preventDefault();
+        modal.focus();
+        return;
+      }
+      const first = candidates[0];
+      const last = candidates[candidates.length - 1];
+      if (!modal.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('focusin', handleFocus);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('focusin', handleFocus);
+      document.removeEventListener('keydown', handleKey);
+      for (const record of isolated) {
+        record.element.inert = record.inert;
+        if (record.ariaHidden === null) record.element.removeAttribute('aria-hidden');
+        else record.element.setAttribute('aria-hidden', record.ariaHidden);
+      }
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [activeModal, closeGrade, earlyConfirm, togglePause]);
+
+  const currentHintLevel =
+    hintState.objective === snapshot.viewModel.objective ? hintState.level : 0;
+  const nextHintLevel = Math.min(3, currentHintLevel + 1) as 1 | 2 | 3;
+  const hintText =
+    currentHintLevel === 1
+      ? snapshot.viewModel.objective
+      : currentHintLevel === 2
+        ? 'Use Recenter to face the current goal, then walk until the target label appears near the crosshair.'
+        : currentHintLevel === 3
+          ? `Aim at the labeled target and use ${snapshot.viewModel.primaryActionLabel || 'the highlighted action'}.`
+          : 'Hints become more specific one level at a time. They never deduct points.';
+  const resolvedScore = useMemo(
+    () => scoreBreakdown ?? ({ total: snapshot.score } as ScoreBreakdown),
+    [scoreBreakdown, snapshot.score],
+  );
+  const finalReady =
+    classroom &&
+    !mission.completion.practice &&
+    !mission.completion.completionLocked &&
+    Boolean(mission.stageTimestamps.stable);
+  const actionHoldable = !finalReady && holdable;
+  const canSubmitEarly =
+    classroom &&
+    !mission.completion.practice &&
+    !mission.completion.completionLocked &&
+    mission.boundary.wallAnchors.length === 6 &&
+    mission.boundary.membraneAnchors.length === 6 &&
+    !finalReady;
 
   return (
     <main
+      ref={missionRootRef}
       className="voxel-proof voxel-mission"
+      data-active-modal={activeModal ?? 'none'}
       data-mission-phase={stage}
       data-mission-revision={snapshot.diagnostics.revision}
       data-mission-score={snapshot.score}
@@ -256,19 +537,29 @@ export default function VoxelMissionApp() {
       data-mission-paused={snapshot.diagnostics.paused}
       data-mission-overview={snapshot.diagnostics.overview}
       data-mission-context-lost={contextLost || snapshot.diagnostics.contextLost}
+      data-mission-active-ms={classroom ? Math.floor(activeElapsedMs) : undefined}
+      data-mission-save-state={classroom ? (saveStatus?.state ?? 'checking') : undefined}
       data-mission-cytoplasm-solid-cells={snapshot.diagnostics.cytoplasmSolidCells}
-      data-mission-storage-writes={snapshot.diagnostics.storageWrites}
-      data-mission-api-requests={snapshot.diagnostics.apiRequests}
+      data-mission-storage-writes={classroom ? undefined : snapshot.diagnostics.storageWrites}
+      data-mission-api-requests={classroom ? undefined : snapshot.diagnostics.apiRequests}
       {...structureData(snapshot)}
     >
       <VoxelMissionCanvas
+        initialMission={initialMission}
+        reducedMotion={accessibility?.reducedMotion}
         onContextLost={handleContextLost}
         onReady={handleReady}
         onSnapshot={handleSnapshot}
       />
 
       <section className="voxel-proof-objective" aria-live="polite">
-        <p className="voxel-proof-kicker">PHASE 4.5 · ONE VOXEL RUNTIME · UNGRADED</p>
+        <p className="voxel-proof-kicker">
+          {classroom
+            ? mission.completion.practice
+              ? 'UNGRADED PRACTICE · RECORDED RESULT STAYS LOCKED'
+              : '15-MINUTE BIOLOGY BUILD · PLANT CELL MODEL'
+            : 'PHASE 4.5 · ONE VOXEL RUNTIME · UNGRADED'}
+        </p>
         <h1>{snapshot.viewModel.objective}</h1>
         <div className="boundary-layer-progress" aria-label="Integrated model progress">
           <span>WALL {mission.boundary.wallAnchors.length}/6</span>
@@ -283,7 +574,11 @@ export default function VoxelMissionApp() {
             /8
           </span>
         </div>
-        <p className="boundary-checkpoint-score">MODEL CHECKPOINT {snapshot.score}/80</p>
+        <p className="boundary-checkpoint-score">
+          {classroom
+            ? `CHECKPOINT GRADE ${snapshot.score}/100`
+            : `MODEL CHECKPOINT ${snapshot.score}/80`}
+        </p>
         <p className="voxel-proof-model-note">
           Classroom model: supplies are prefabs, not organelle ores. Cytoplasm is a non-solid
           interior fill. The nuclear membrane is visual only, not a ninth structure.
@@ -301,10 +596,40 @@ export default function VoxelMissionApp() {
         >
           {snapshot.diagnostics.overview ? 'CLOSE VIEW' : 'OVERVIEW'}
         </button>
-        <button type="button" onClick={togglePause} disabled={contextLost}>
+        <button type="button" onClick={togglePause} disabled={Boolean(activeModal)}>
           {snapshot.diagnostics.paused ? 'RESUME' : 'PAUSE'}
         </button>
-        <span className="voxel-proof-fps">{snapshot.fps || '—'} FPS · DESKTOP/EMULATED</span>
+        {classroom ? (
+          <>
+            <button type="button" onClick={openGrade} disabled={disabled}>
+              GRADE
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const level = nextHintLevel;
+                setHintState({ objective: snapshot.viewModel.objective, level });
+                onUseHint?.(level);
+              }}
+              disabled={disabled || currentHintLevel >= 3}
+            >
+              {currentHintLevel >= 3 ? 'HINT 3/3' : `HINT ${nextHintLevel}/3`}
+            </button>
+            {mission.completion.practice ? (
+              <button type="button" onClick={onReturnToResults} disabled={finalizing}>
+                END PRACTICE
+              </button>
+            ) : null}
+            <span className="voxel-classroom-timer">
+              {mission.completion.practice
+                ? 'UNTIMED PRACTICE'
+                : `${formatRemaining(activeElapsedMs)} LEFT`}
+            </span>
+            <span className="voxel-classroom-save">{saveStatusText(saveStatus)}</span>
+          </>
+        ) : (
+          <span className="voxel-proof-fps">{snapshot.fps || '—'} FPS · DESKTOP/EMULATED</span>
+        )}
       </div>
 
       {!snapshot.diagnostics.overview ? (
@@ -342,27 +667,46 @@ export default function VoxelMissionApp() {
         {snapshot.viewModel.feedback?.message ?? 'Aim at the current model objective.'}
       </p>
 
-      <MovementJoystick
-        key={disabled ? 'disabled' : 'active'}
-        disabled={disabled}
-        onMove={handleJoystick}
-      />
+      {classroom && currentHintLevel > 0 ? (
+        <aside className="voxel-classroom-hint" aria-live="polite">
+          <strong>HINT {currentHintLevel}/3</strong>
+          <span>{hintText}</span>
+        </aside>
+      ) : null}
+
+      {!classroom || controls === 'touch-only' ? (
+        <MovementJoystick
+          key={disabled ? 'disabled' : 'active'}
+          disabled={disabled}
+          onMove={handleJoystick}
+        />
+      ) : null}
 
       <div className="voxel-proof-actions mission-actions">
         <button
           type="button"
-          className={`voxel-proof-action mission-primary-action${holdable ? ' voxel-proof-mine' : ' voxel-proof-place'}`}
-          disabled={disabled || !snapshot.viewModel.primaryActionEnabled}
-          aria-label={snapshot.viewModel.primaryActionAccessibleLabel}
+          className={`voxel-proof-action mission-primary-action${actionHoldable ? ' voxel-proof-mine' : ' voxel-proof-place'}`}
+          disabled={
+            finalizing || (!finalReady && (disabled || !snapshot.viewModel.primaryActionEnabled))
+          }
+          aria-label={
+            finalReady
+              ? 'Submit the final graded result'
+              : snapshot.viewModel.primaryActionAccessibleLabel
+          }
           onClick={() => {
+            if (finalReady) {
+              void onSubmit?.('complete');
+              return;
+            }
             if (suppressHeldClickRef.current) {
               suppressHeldClickRef.current = false;
-            } else if (!holdable) {
+            } else if (!actionHoldable) {
               controllerRef.current?.action();
             }
           }}
           onPointerDown={() => {
-            if (!holdable) return;
+            if (!actionHoldable) return;
             suppressHeldClickRef.current = true;
             controllerRef.current?.setActionHeld(true);
           }}
@@ -370,18 +714,22 @@ export default function VoxelMissionApp() {
           onPointerCancel={stopHeldAction}
           onPointerLeave={stopHeldAction}
           onKeyDown={(event) => {
-            if (!holdable) return;
+            if (!actionHoldable) return;
             suppressHeldClickRef.current = true;
             handleActionKeyboard(event, true);
           }}
           onKeyUp={(event) => {
-            if (holdable) handleActionKeyboard(event, false);
+            if (actionHoldable) handleActionKeyboard(event, false);
           }}
         >
-          <span aria-hidden="true">{holdable ? 'TOOL' : 'USE'}</span>
-          {holdable
-            ? `HOLD ${snapshot.viewModel.primaryActionLabel}`
-            : snapshot.viewModel.primaryActionLabel}
+          <span aria-hidden="true">{finalReady ? 'GRADE' : actionHoldable ? 'TOOL' : 'USE'}</span>
+          {finalizing
+            ? 'LOCKING RESULT…'
+            : finalReady
+              ? 'SUBMIT FINAL RESULT'
+              : actionHoldable
+                ? `HOLD ${snapshot.viewModel.primaryActionLabel}`
+                : snapshot.viewModel.primaryActionLabel}
         </button>
       </div>
 
@@ -412,7 +760,7 @@ export default function VoxelMissionApp() {
         WASD / ARROWS · DRAG TO LOOK · HOLD TOOL · USE · 1–8 HOTBAR
       </p>
 
-      {snapshot.score === 80 && evidenceCount === 5 ? (
+      {!classroom && snapshot.score === 80 && evidenceCount === 5 ? (
         <section className="voxel-proof-complete mission-complete" role="status">
           <p>PHASE 4.5 MODEL CHECKPOINT</p>
           <h2>Eight structures · eight visible functions</h2>
@@ -422,40 +770,153 @@ export default function VoxelMissionApp() {
 
       {snapshot.diagnostics.overview ? (
         <aside className="mission-overview-note" aria-live="polite">
-          <strong>OVERVIEW CUTAWAY</strong>
-          <span>Close Overview to resume walking and building.</span>
+          <strong>{classroom ? 'CELL SYSTEM OVERVIEW' : 'OVERVIEW CUTAWAY'}</strong>
+          <span>
+            {classroom
+              ? turgorDescription(mission)
+              : 'Close Overview to resume walking and building.'}
+          </span>
+          {classroom ? <small>Close Overview to resume walking and building.</small> : null}
         </aside>
       ) : null}
 
-      {snapshot.diagnostics.paused && !contextLost ? (
+      {classroom && activeModal === 'finalizing' ? (
         <section
           className="voxel-proof-modal"
+          data-mission-modal="finalizing"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="mission-pause-title"
+          aria-labelledby="mission-finalizing-title"
+          tabIndex={-1}
         >
           <div>
-            <p>INTEGRATED MISSION PAUSED</p>
-            <h2 id="mission-pause-title">Input is cleared</h2>
-            <p>Movement, drag-look, held tools, and joystick input have stopped.</p>
-            <button type="button" autoFocus onClick={togglePause}>
-              RESUME VOXEL MISSION
+            <p>LOCKING GRADED RESULT</p>
+            <h2 id="mission-finalizing-title">Confirming the local save</h2>
+            <p>
+              Gameplay and the active timer are frozen until the immutable grade and delivery queue
+              are both stored on this device.
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {classroom && activeModal === 'grade' ? (
+        <section
+          className="voxel-proof-modal voxel-classroom-grade"
+          data-mission-modal="grade"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="voxel-grade-title"
+          tabIndex={-1}
+        >
+          <div>
+            <p>CHECKPOINT GRADE · NO QUIZ</p>
+            <h2 id="voxel-grade-title">{Math.round(resolvedScore.total)}%</h2>
+            <dl className="voxel-grade-breakdown">
+              {SCORE_LABELS.map(([key, label, maximum]) => (
+                <div key={key}>
+                  <dt>{label}</dt>
+                  <dd>
+                    {resolvedScore[key]} / {maximum}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {earlyConfirm ? (
+              <div className="voxel-early-confirm" role="alert">
+                <strong>Lock {Math.round(resolvedScore.total)}% now?</strong>
+                <span>Unfinished objectives remain unearned in this graded result.</span>
+                <div>
+                  <button type="button" onClick={() => setEarlyConfirm(false)}>
+                    KEEP BUILDING
+                  </button>
+                  <button
+                    type="button"
+                    disabled={finalizing}
+                    onClick={() => void onSubmit?.('early')}
+                  >
+                    {finalizing ? 'LOCKING RESULT…' : 'SUBMIT EARLY RESULT'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="voxel-grade-actions">
+                <button type="button" autoFocus onClick={closeGrade}>
+                  RETURN TO MISSION
+                </button>
+                {canSubmitEarly ? (
+                  <button type="button" onClick={() => setEarlyConfirm(true)}>
+                    SUBMIT THIS GRADE EARLY
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {classroom && activeModal === 'finalization-error' ? (
+        <section
+          className="voxel-proof-modal is-error"
+          data-mission-modal="finalization-error"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="mission-save-error-title"
+          tabIndex={-1}
+        >
+          <div>
+            <p>RESULT NOT LOCKED</p>
+            <h2 id="mission-save-error-title">Local finalization did not finish</h2>
+            <p>{finalizationError}</p>
+            <p>Your mission remains available. No successful submission is being claimed.</p>
+            <button type="button" autoFocus onClick={() => void onRetryFinalization?.()}>
+              RETRY LOCAL FINALIZATION
             </button>
           </div>
         </section>
       ) : null}
 
-      {contextLost || snapshot.diagnostics.contextLost ? (
+      {activeModal === 'pause' ? (
+        <section
+          className="voxel-proof-modal"
+          data-mission-modal="pause"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mission-pause-title"
+          tabIndex={-1}
+        >
+          <div>
+            <p>{classroom ? 'MISSION PAUSED · TIMER STOPPED' : 'INTEGRATED MISSION PAUSED'}</p>
+            <h2 id="mission-pause-title">Input is cleared</h2>
+            <p>
+              Movement, drag-look, held tools, and joystick input have stopped.
+              {classroom ? ` ${saveStatusText(saveStatus)}.` : ''}
+            </p>
+            <button type="button" autoFocus onClick={togglePause}>
+              RESUME MISSION
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {activeModal === 'context-loss' ? (
         <section
           className="voxel-proof-modal is-error"
+          data-mission-modal="context-loss"
           role="alertdialog"
+          aria-modal="true"
           aria-labelledby="mission-context-title"
+          tabIndex={-1}
         >
           <div>
             <p>GRAPHICS CONTEXT LOST</p>
             <h2 id="mission-context-title">The voxel mission stopped safely</h2>
-            <p>Reload this development-only route before continuing.</p>
-            <button type="button" onClick={() => window.location.reload()}>
+            <p>
+              {classroom
+                ? 'Gameplay and the active timer are frozen. Reload to restore the last confirmed local save.'
+                : 'Reload this development-only route before continuing.'}
+            </p>
+            <button type="button" autoFocus onClick={() => window.location.reload()}>
               RELOAD VOXEL MISSION
             </button>
           </div>

@@ -10,6 +10,49 @@
   grid-column: 1 / -1;
 }
 
+.voxel-classroom-timer,
+.voxel-classroom-save {
+  min-height: 28px;
+  padding: 6px 8px;
+  border: 2px solid rgb(255 255 255 / 62%);
+  color: #f6ffd4;
+  background: rgb(17 35 25 / 88%);
+  font-size: 0.68rem;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.voxel-classroom-timer {
+  color: #fff2a8;
+}
+
+.voxel-classroom-save {
+  grid-column: span 2;
+}
+
+.voxel-classroom-hint {
+  position: absolute;
+  z-index: 6;
+  right: 50%;
+  bottom: 148px;
+  display: grid;
+  gap: 4px;
+  width: min(520px, 52vw);
+  padding: 9px 12px;
+  transform: translateX(50%);
+  border: 3px solid #ffe287;
+  color: #fffbe2;
+  background: rgb(40 50 24 / 94%);
+  box-shadow: 4px 4px 0 rgb(13 25 18 / 70%);
+  font-size: 0.72rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.voxel-classroom-hint strong {
+  color: #dcff78;
+}
+
 .voxel-mission .mission-actions {
   grid-template-columns: 128px;
 }
@@ -50,6 +93,67 @@
   color: #dcff78;
 }
 
+.mission-overview-note small {
+  color: #fff2b0;
+  font-size: 0.68rem;
+}
+
+.voxel-classroom-grade > div {
+  max-height: calc(100dvh - 34px);
+  overflow: auto;
+  text-align: left;
+}
+
+.voxel-classroom-grade h2 {
+  color: #efff91;
+  font-size: 2.4rem;
+  text-align: center;
+}
+
+.voxel-grade-breakdown {
+  display: grid;
+  gap: 3px;
+  margin: 10px 0;
+}
+
+.voxel-grade-breakdown div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 2px solid rgb(255 255 255 / 18%);
+}
+
+.voxel-grade-breakdown dd {
+  margin: 0;
+  color: #fff2a8;
+}
+
+.voxel-grade-actions,
+.voxel-early-confirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.voxel-grade-actions button,
+.voxel-early-confirm button {
+  min-width: 180px;
+}
+
+.voxel-early-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 3px dashed #ffe287;
+  text-align: center;
+}
+
+.voxel-early-confirm span {
+  font-size: 0.76rem;
+}
+
 @media (max-height: 700px) {
   .voxel-mission .voxel-proof-objective {
     width: min(480px, calc(100vw - 332px));
@@ -57,6 +161,20 @@
 
   .voxel-mission .mission-complete {
     display: none;
+  }
+
+  .voxel-classroom-hint {
+    bottom: 132px;
+    padding: 6px 9px;
+    font-size: 0.66rem;
+  }
+
+  .voxel-classroom-grade > div {
+    padding: 16px 20px;
+  }
+
+  .voxel-grade-breakdown div {
+    padding: 3px 0;
   }
 }
 

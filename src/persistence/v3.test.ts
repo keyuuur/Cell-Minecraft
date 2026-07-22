@@ -31,6 +31,7 @@ import {
   beginAttemptV3,
   claimNextSubmissionLease,
   classifyLegacyLocalSave,
+  confirmNewStudentHandoff,
   exportV3Diagnostic,
   findResumeDecision,
   hideActiveAttemptForNewStudent,
@@ -407,6 +408,26 @@ describe('V3 per-attempt persistence', () => {
     ).rejects.toThrow(/SUBMISSION_STATUS_TRANSITION_REQUIRES_ATOMIC_OPERATION/);
   });
 
+  it('lets one coordinator atomically freeze and queue exactly one immutable grade', async () => {
+    const base = activeSave('attempt-atomic-finalization');
+    await beginAttemptV3(base);
+    const coordinator = await SaveCoordinator.create(base.attemptId);
+    const complete = completedSave(base);
+    const payload = payloadFromCompleted(complete);
+
+    const first = coordinator.finalizeAndQueue(complete, payload, complete.savedAt + 1);
+    const duplicateClick = coordinator.finalizeAndQueue(complete, payload, complete.savedAt + 1);
+    const [firstResult, duplicateResult] = await Promise.all([first, duplicateClick]);
+
+    expect(firstResult).toEqual(duplicateResult);
+    expect(firstResult.submissionStatus).toBe('queued');
+    expect(await queuedSubmissionsV2()).toHaveLength(1);
+    expect((await loadAttemptV3(base.attemptId))?.save).toEqual(firstResult);
+    await expect(
+      coordinator.requestSave({ ...firstResult, savedAt: firstResult.savedAt + 1 }),
+    ).rejects.toThrow(/ATTEMPT_FINALIZATION_IN_PROGRESS/);
+  });
+
   it('matches identity only after entry and fails closed on multiple candidates', async () => {
     const student = { firstName: '  TEST  ', lastInitial: 's', period: 1 };
     await beginAttemptV3(activeSave('attempt-match-one'));
@@ -417,7 +438,7 @@ describe('V3 per-attempt persistence', () => {
     expect(await findResumeDecision(student)).toMatchObject({ kind: 'one' });
     expect(
       await findResumeDecision({ firstName: 'Different', lastInitial: 'D', period: 1 }),
-    ).toEqual({ kind: 'none' });
+    ).toMatchObject({ kind: 'handoff' });
     const db = await openCellGameDatabase();
     const hidden = await db.get('attempts', 'attempt-match-one');
     if (!hidden) throw new Error('missing hidden fixture');
@@ -438,6 +459,26 @@ describe('V3 per-attempt persistence', () => {
     expect(await hideActiveAttemptForNewStudent(complete.attemptId)).toBe(true);
     expect(await loadAttemptV3(complete.attemptId)).not.toBeNull();
     expect(await queuedSubmissionsV2()).toHaveLength(1);
+    expect(await (await openCellGameDatabase()).get('meta', ACTIVE_ATTEMPT_META_KEY)).toMatchObject(
+      {
+        attemptId: null,
+      },
+    );
+  });
+
+  it('confirms a privacy-neutral new-student handoff only for the observed generation', async () => {
+    await beginAttemptV3(activeSave('attempt-student-a'));
+    const decision = await findResumeDecision({
+      firstName: 'Student',
+      lastInitial: 'B',
+      period: 2,
+    });
+    expect(decision).toMatchObject({ kind: 'handoff' });
+    if (decision.kind !== 'handoff') throw new Error('missing handoff fixture');
+    expect(await confirmNewStudentHandoff(decision.generation + 1)).toBe(false);
+    expect((await loadAttemptV3('attempt-student-a'))?.resumeVisible).toBe(true);
+    expect(await confirmNewStudentHandoff(decision.generation)).toBe(true);
+    expect((await loadAttemptV3('attempt-student-a'))?.resumeVisible).toBe(false);
     expect(await (await openCellGameDatabase()).get('meta', ACTIVE_ATTEMPT_META_KEY)).toMatchObject(
       {
         attemptId: null,

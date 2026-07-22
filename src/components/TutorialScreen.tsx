@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useGameStore } from '../state/gameStore';
+import { useIntegratedGameStore } from '../state/integratedGameStore';
 import type { ControlProfile } from '../types/game';
 
 const controlOptions: Array<{ id: ControlProfile; title: string; description: string }> = [
@@ -23,25 +23,37 @@ const distance = (a: { x: number; y: number }, b: { x: number; y: number }) =>
 const DEPOT = { x: 35, y: 70 };
 const TARGET = { x: 76, y: 30 };
 
-export function TutorialScreen() {
-  const controls = useGameStore((state) => state.controls);
-  const setControls = useGameStore((state) => state.setControls);
-  const accessibility = useGameStore((state) => state.accessibility);
-  const updateAccessibility = useGameStore((state) => state.updateAccessibility);
-  const startMission = useGameStore((state) => state.startMission);
+interface TutorialScreenProps {
+  onStartMission: () => Promise<void> | void;
+  starting?: boolean;
+  startError?: string;
+}
+
+export function TutorialScreen({
+  onStartMission,
+  starting = false,
+  startError = '',
+}: TutorialScreenProps) {
+  const controls = useIntegratedGameStore((state) => state.controls);
+  const setControls = useIntegratedGameStore((state) => state.setControls);
+  const accessibility = useIntegratedGameStore((state) => state.accessibility);
+  const updateAccessibility = useIntegratedGameStore((state) => state.updateAccessibility);
   const [practiced, setPracticed] = useState({
     move: false,
     look: false,
-    interact: false,
+    mine: false,
+    collect: false,
     place: false,
+    inspect: false,
     recenter: false,
   });
   const [position, setPosition] = useState({ x: 12, y: 78 });
   const [collected, setCollected] = useState(false);
+  const [mined, setMined] = useState(false);
   const [placed, setPlaced] = useState(false);
   const [lookAngle, setLookAngle] = useState(0);
   const [practiceMessage, setPracticeMessage] = useState(
-    'Move to the supply depot, collect the cube, then place it in the target zone.',
+    'Move to the supply depot, open it with the tool, collect the cube, then place and inspect it.',
   );
   const joystickOrigin = useRef<{
     pointerX: number;
@@ -214,15 +226,29 @@ export function TutorialScreen() {
                 type="button"
                 onClick={() => {
                   if (distance(position, DEPOT) > 20) {
-                    setPracticeMessage('Move closer to the Supply marker before interacting.');
+                    setPracticeMessage('Move closer to the Supply marker before using the tool.');
+                    return;
+                  }
+                  setMined(true);
+                  setPracticed((value) => ({ ...value, mine: true }));
+                  setPracticeMessage('Supply opened. Collect the visible cube drop.');
+                }}
+              >
+                Hold tool to mine
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!mined) {
+                    setPracticeMessage('Open the supply with the tool before collecting the drop.');
                     return;
                   }
                   setCollected(true);
-                  setPracticed((value) => ({ ...value, interact: true }));
+                  setPracticed((value) => ({ ...value, collect: true }));
                   setPracticeMessage('Cube collected. Move into the Target zone and place it.');
                 }}
               >
-                Interact
+                Collect
               </button>
               <button
                 type="button"
@@ -233,10 +259,23 @@ export function TutorialScreen() {
                   }
                   setPlaced(true);
                   setPracticed((value) => ({ ...value, place: true }));
-                  setPracticeMessage('Placement worked. Practice looking, then recenter the view.');
+                  setPracticeMessage('Placement worked. Inspect it to record visible evidence.');
                 }}
               >
                 Place
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!placed) {
+                    setPracticeMessage('Place the cube before inspecting its visible effect.');
+                    return;
+                  }
+                  setPracticed((value) => ({ ...value, inspect: true }));
+                  setPracticeMessage('Inspection recorded. Practice looking, then recenter.');
+                }}
+              >
+                Inspect
               </button>
               <button
                 type="button"
@@ -276,11 +315,20 @@ export function TutorialScreen() {
         <button
           className="primary-button start-button"
           type="button"
-          disabled={!ready}
-          onClick={() => startMission(false)}
+          disabled={!ready || starting}
+          onClick={() => onStartMission()}
         >
-          {ready ? 'Start mission and timer' : 'Practice all controls to start'}
+          {starting
+            ? 'Preparing saved mission…'
+            : ready
+              ? 'Start mission and timer'
+              : 'Practice all controls to start'}
         </button>
+        {startError && (
+          <p className="form-error" role="alert">
+            {startError}
+          </p>
+        )}
       </section>
     </main>
   );

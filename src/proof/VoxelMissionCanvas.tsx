@@ -14,6 +14,8 @@ export interface VoxelMissionController {
 }
 
 interface VoxelMissionCanvasProps {
+  initialMission?: VoxelMissionSceneSnapshot['mission'];
+  reducedMotion?: boolean;
   onContextLost: () => void;
   onReady: (controller: VoxelMissionController | null) => void;
   onSnapshot: (snapshot: VoxelMissionSceneSnapshot) => void;
@@ -21,17 +23,33 @@ interface VoxelMissionCanvasProps {
 
 export function VoxelMissionCanvas({
   onContextLost,
+  initialMission,
+  reducedMotion = false,
   onReady,
   onSnapshot,
 }: VoxelMissionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const initialMissionRef = useRef(initialMission);
+  const reducedMotionRef = useRef(reducedMotion);
+  const callbacksRef = useRef({ onContextLost, onReady, onSnapshot });
+
+  useEffect(() => {
+    callbacksRef.current = { onContextLost, onReady, onSnapshot };
+  }, [onContextLost, onReady, onSnapshot]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const controller = new VoxelMissionScene(canvas, { onContextLost, onSnapshot });
-    onReady(controller);
+    const controller = new VoxelMissionScene(
+      canvas,
+      {
+        onContextLost: () => callbacksRef.current.onContextLost(),
+        onSnapshot: (snapshot) => callbacksRef.current.onSnapshot(snapshot),
+      },
+      { initialSnapshot: initialMissionRef.current, reducedMotion: reducedMotionRef.current },
+    );
+    callbacksRef.current.onReady(controller);
 
     const clearInput = () => controller.clearInput();
     const resize = () => {
@@ -54,10 +72,10 @@ export function VoxelMissionCanvas({
       window.removeEventListener('resize', resize);
       window.removeEventListener('orientationchange', resize);
       document.removeEventListener('visibilitychange', clearIfHidden);
-      onReady(null);
+      callbacksRef.current.onReady(null);
       controller.dispose();
     };
-  }, [onContextLost, onReady, onSnapshot]);
+  }, []);
 
   return (
     <canvas

@@ -244,6 +244,10 @@ select option {
   grid-column: 1 / -1;
   margin-top: 0;
 }
+.results-actions .results-action-error {
+  flex-basis: 100%;
+  width: 100%;
+}
 .results-actions .primary-button,
 .results-actions .secondary-button {
   flex-basis: 260px;

@@ -12,7 +12,7 @@ const EXPECTED_EVIDENCE_FILES = [
   '02-wall-stack-collected.png',
   '03-invalid-overlap-conserves-module.png',
   '04-nested-wall-and-membrane.png',
-  '05-removed-membrane-and-recovery.png',
+  '05-boundary-locked-before-internal-build.png',
   '06-full-height-non-solid-cytoplasm.png',
   '07-nucleus-and-ribosomes-evidence.png',
   '08-mitochondria-and-chloroplasts-evidence.png',
@@ -172,6 +172,7 @@ async function approachUntil(
       : null;
   };
   for (let pulse = 0; pulse < maximumPulses; pulse += 1) {
+    if (await condition()) return;
     await recenter.click();
     if (await condition()) return;
     {
@@ -213,14 +214,18 @@ async function approachUntil(
         await recordNavigation('forward');
       }
     }
+    if (await condition()) return;
   }
   await recenter.click();
   await holdJoystick(page, 'backward', 480);
   for (let pulse = 0; pulse < 16; pulse += 1) {
+    if (await condition()) return;
     await recenter.click();
     if (await condition()) return;
     await holdJoystick(page, 'forward', 130);
+    if (await condition()) return;
   }
+  if (await condition()) return;
   throw new Error(
     `Visible movement did not reach the recentered mission target. phase=${await mission.getAttribute(
       'data-mission-phase',
@@ -401,7 +406,7 @@ test('unified voxel mission completes boundary through structures using visible 
   await page.waitForTimeout(600);
   await expect(mission).toHaveAttribute('data-mission-player', playerBeforePause!);
   await expect(mission).toHaveAttribute('data-mission-revision', revisionBeforePause!);
-  await page.getByRole('button', { name: 'RESUME VOXEL MISSION' }).click();
+  await page.getByRole('button', { name: 'RESUME MISSION' }).click();
   await page.keyboard.up('w');
   await expect(mission).toHaveAttribute('data-mission-paused', 'false');
 
@@ -473,38 +478,24 @@ test('unified voxel mission completes boundary through structures using visible 
   );
   await action.click();
   await expect(mission).toHaveAttribute('data-mission-membrane-evidence', 'true');
-  const boundaryScore = await mission.getAttribute('data-mission-score');
   await capture(page, images, '04-nested-wall-and-membrane.png');
 
+  // Corrections stay unavailable until the required internal function evidence is complete.
+  // The later vacuole route still proves remove, recover, replace, reinspect, and full-credit
+  // restoration without distracting students from the next required build action here.
   await expect(mission).toHaveAttribute('data-mission-action', 'remove');
-  await holdCurrentAction(page, mission, action, () =>
-    expect(mission).toHaveAttribute('data-mission-correction', 'boundary', { timeout: 5_000 }),
-  );
-  await expect(mission).toHaveAttribute('data-mission-membrane-count', '5');
-  await expect(mission).not.toHaveAttribute('data-mission-score', boundaryScore!);
-  await capture(page, images, '05-removed-membrane-and-recovery.png');
-  await approachAction(page, mission, recenter, 'collect', /DROP · COLLECT/);
-  await action.click();
-  await approachAction(
-    page,
-    mission,
-    recenter,
-    'place',
-    /VALID CELL MEMBRANE PANELS LOCATION · PLACE/,
-  );
-  await action.click();
+  await expect(mission).toHaveAttribute('data-mission-action-enabled', 'false');
   await expect(mission).toHaveAttribute('data-mission-membrane-count', '6');
-  await expect(mission).toHaveAttribute('data-mission-membrane-evidence', 'false');
-  await expect(mission).not.toHaveAttribute('data-mission-score', boundaryScore!);
-  await approachAction(
-    page,
-    mission,
-    recenter,
-    'inspect',
-    /INNER CELL MEMBRANE · INSPECT FUNCTION/,
-  );
-  await action.click();
-  await expect(mission).toHaveAttribute('data-mission-score', boundaryScore!);
+  await expect(mission).toHaveAttribute('data-mission-membrane-evidence', 'true');
+  const lockedBoundaryRevision = await mission.getAttribute('data-mission-revision');
+  const lockedBoundaryScore = await mission.getAttribute('data-mission-score');
+  await page.keyboard.press('e');
+  await page.waitForTimeout(180);
+  await expect(mission).toHaveAttribute('data-mission-revision', lockedBoundaryRevision!);
+  await expect(mission).toHaveAttribute('data-mission-score', lockedBoundaryScore!);
+  await expect(mission).toHaveAttribute('data-mission-membrane-count', '6');
+  await expect(mission).toHaveAttribute('data-mission-membrane-evidence', 'true');
+  await capture(page, images, '05-boundary-locked-before-internal-build.png');
 
   await approachAction(page, mission, recenter, 'interact', /CYTOPLASM CONTROL · ACTIVATE/);
   await action.click();
@@ -723,6 +714,8 @@ test('unified voxel mission latches graphics loss and rejects later visible inpu
   await page.setViewportSize({ width: 1024, height: browserName === 'webkit' ? 680 : 768 });
   await page.goto('/?proof=mission');
   const mission = page.locator('main.voxel-mission');
+  const recenter = page.getByRole('button', { name: 'RECENTER' });
+  await approachAction(page, mission, recenter, 'mine', /CELL WALL PANELS SUPPLY/);
   await expect(mission).toHaveAttribute('data-mission-revision', /^[1-9]\d*$/);
   await expect(mission).toHaveAttribute('data-mission-target', 'supply');
 
@@ -751,4 +744,402 @@ test('unified voxel mission latches graphics loss and rejects later visible inpu
   await expect(mission).toHaveAttribute('data-mission-score', frozen.score!);
   await expect(mission).toHaveAttribute('data-mission-pickups', frozen.pickups!);
   await expect(mission).toHaveAttribute('data-mission-wall-count', frozen.wall!);
+});
+
+async function completeClassroomTutorial(page: Page): Promise<void> {
+  await page.getByRole('radio', { name: /Touch Only/ }).click();
+  const joystick = page.getByLabel('Practice movement joystick');
+  const box = await joystick.boundingBox();
+  if (!box) throw new Error('Tutorial joystick was not visible.');
+  const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  await joystick.dispatchEvent('pointerdown', {
+    pointerId: 41,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: center.x,
+    clientY: center.y,
+  });
+  await joystick.dispatchEvent('pointermove', {
+    pointerId: 41,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: center.x + 50,
+    clientY: center.y - 16,
+  });
+  await joystick.dispatchEvent('pointerup', {
+    pointerId: 41,
+    pointerType: 'touch',
+    isPrimary: true,
+  });
+  await page.getByRole('button', { name: 'Hold tool to mine' }).click();
+  await page.getByRole('button', { name: 'Collect' }).click();
+  await joystick.dispatchEvent('pointerdown', {
+    pointerId: 42,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: center.x,
+    clientY: center.y,
+  });
+  await joystick.dispatchEvent('pointermove', {
+    pointerId: 42,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: center.x + 82,
+    clientY: center.y - 80,
+  });
+  await joystick.dispatchEvent('pointerup', {
+    pointerId: 42,
+    pointerType: 'touch',
+    isPrimary: true,
+  });
+  await page.getByRole('button', { name: 'Place' }).click();
+  await page.getByRole('button', { name: 'Inspect' }).click();
+  const look = page.getByLabel('Drag here to practice looking');
+  const lookBox = await look.boundingBox();
+  if (!lookBox) throw new Error('Tutorial look area was not visible.');
+  await look.dispatchEvent('pointerdown', {
+    pointerId: 43,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: lookBox.x + 12,
+    clientY: lookBox.y + lookBox.height / 2,
+  });
+  await look.dispatchEvent('pointermove', {
+    pointerId: 43,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: lookBox.x + 48,
+    clientY: lookBox.y + lookBox.height / 2,
+  });
+  await look.dispatchEvent('pointerup', {
+    pointerId: 43,
+    pointerType: 'touch',
+    isPrimary: true,
+  });
+  await page.getByRole('button', { name: 'Recenter' }).click();
+  await expect(page.getByRole('button', { name: 'Start mission and timer' })).toBeEnabled();
+}
+
+test('integrated classroom route reaches one queued immutable 100 percent result through visible controls', async ({
+  page,
+  browserName,
+}) => {
+  test.setTimeout(900_000);
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  const apiRequests: string[] = [];
+  const babylonRequestsBeforeStart: string[] = [];
+  let missionStarted = false;
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('request', (request) => {
+    const url = request.url();
+    if (new URL(url).pathname.startsWith('/api/')) apiRequests.push(url);
+    if (
+      !missionStarted &&
+      (url.includes('@babylonjs') ||
+        url.includes('VoxelMissionApp') ||
+        url.includes('VoxelMissionScene'))
+    ) {
+      babylonRequestsBeforeStart.push(url);
+    }
+  });
+
+  await page.setViewportSize({ width: 1024, height: browserName === 'webkit' ? 680 : 768 });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Build a Living Cell' })).toBeVisible();
+  await expect(page.locator('canvas')).toHaveCount(0);
+  await page.getByLabel('First name').fill('Route');
+  await page.getByLabel('Last initial').fill('T');
+  await page.getByLabel('Class period').selectOption('3');
+  await expect(page.getByRole('button', { name: 'Continue to controls' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Continue to controls' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Choose and practice your controls' }),
+  ).toBeVisible();
+  await expect(page.locator('canvas')).toHaveCount(0);
+  await completeClassroomTutorial(page);
+  expect(babylonRequestsBeforeStart).toEqual([]);
+  missionStarted = true;
+  await page.getByRole('button', { name: 'Start mission and timer' }).click();
+
+  const mission = page.locator('main.voxel-mission');
+  const recenter = page.getByRole('button', { name: 'RECENTER' });
+  const action = page.locator('.mission-primary-action');
+  await expect(mission).toHaveAttribute('data-mission-phase', 'boundary', { timeout: 30_000 });
+  await expect(mission).toHaveAttribute('data-mission-score', '0');
+  await approachAction(page, mission, recenter, 'mine', /CELL WALL PANELS SUPPLY/);
+  await page.screenshot({ path: test.info().outputPath('01-classroom-mission-opening.png') });
+
+  await page.getByRole('button', { name: 'PAUSE' }).click();
+  await expect(mission).toHaveAttribute('data-mission-paused', 'true');
+  const pausedAt = await mission.getAttribute('data-mission-active-ms');
+  await page.waitForTimeout(700);
+  await expect(mission).toHaveAttribute('data-mission-active-ms', pausedAt!);
+  await page.getByRole('button', { name: 'RESUME MISSION' }).click();
+  await expect(mission).toHaveAttribute('data-mission-paused', 'false');
+
+  await page.getByRole('button', { name: 'GRADE' }).click();
+  await expect(mission).toHaveAttribute('data-active-modal', 'grade');
+  await expect(mission).toHaveAttribute('data-mission-paused', 'true');
+  const gradePausedAt = await mission.getAttribute('data-mission-active-ms');
+  const gradeDialog = page.getByRole('dialog', { name: '0%' });
+  await expect(gradeDialog).toBeVisible();
+  await expect(
+    mission.locator('.voxel-proof-utilities button', { hasText: /^RESUME$/ }),
+  ).toBeDisabled();
+  await expect
+    .poll(() =>
+      mission.evaluate((root) => {
+        const active = root.querySelector('[data-mission-modal="grade"]');
+        return Array.from(root.children)
+          .filter((child) => child !== active)
+          .every(
+            (child) => child.getAttribute('aria-hidden') === 'true' && (child as HTMLElement).inert,
+          );
+      }),
+    )
+    .toBe(true);
+  await page.waitForTimeout(700);
+  await expect(mission).toHaveAttribute('data-mission-active-ms', gradePausedAt!);
+  const returnToMission = page.getByRole('button', { name: 'RETURN TO MISSION' });
+  await expect(returnToMission).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(returnToMission).toBeFocused();
+  await page.screenshot({ path: test.info().outputPath('00-classroom-grade-modal.png') });
+  await page.keyboard.press('Escape');
+  await expect(gradeDialog).not.toBeVisible();
+  await expect(mission).toHaveAttribute('data-active-modal', 'none');
+  await expect(mission).toHaveAttribute('data-mission-paused', 'false');
+
+  await mineAndCollect(
+    page,
+    mission,
+    recenter,
+    action,
+    /CELL WALL PANELS SUPPLY/,
+    'data-mission-cellwall-inventory',
+    '6',
+  );
+  for (let index = 0; index < 6; index += 1) {
+    await approachAction(
+      page,
+      mission,
+      recenter,
+      'place',
+      /VALID CELL WALL PANELS LOCATION · PLACE/,
+    );
+    await action.click();
+    await expect(mission).toHaveAttribute('data-mission-wall-count', String(index + 1));
+  }
+  await approachAction(page, mission, recenter, 'inspect', /OUTER CELL WALL · INSPECT FUNCTION/);
+  await action.click();
+
+  await mineAndCollect(
+    page,
+    mission,
+    recenter,
+    action,
+    /CELL MEMBRANE PANELS SUPPLY/,
+    'data-mission-cellmembrane-inventory',
+    '6',
+  );
+  for (let index = 0; index < 6; index += 1) {
+    await approachAction(
+      page,
+      mission,
+      recenter,
+      'place',
+      /VALID CELL MEMBRANE PANELS LOCATION · PLACE/,
+    );
+    await action.click();
+    await expect(mission).toHaveAttribute('data-mission-membrane-count', String(index + 1));
+  }
+  await approachAction(
+    page,
+    mission,
+    recenter,
+    'inspect',
+    /INNER CELL MEMBRANE · INSPECT FUNCTION/,
+  );
+  await action.click();
+  await approachAction(page, mission, recenter, 'interact', /CYTOPLASM CONTROL · ACTIVATE/);
+  await action.click();
+  await approachAction(page, mission, recenter, 'inspect', /CYTOPLASM FULL-HEIGHT FILL · INSPECT/);
+  await action.click();
+  await page.screenshot({ path: test.info().outputPath('02-classroom-boundary-cytoplasm.png') });
+
+  await mineAndCollect(
+    page,
+    mission,
+    recenter,
+    action,
+    /NUCLEUS SUPPLY/,
+    'data-mission-nucleus-inventory',
+    '1',
+  );
+  await placeAndInspectStructure(page, mission, recenter, action, 'nucleus', /NUCLEUS · INSPECT/);
+  await mineAndCollect(
+    page,
+    mission,
+    recenter,
+    action,
+    /RIBOSOMES SUPPLY/,
+    'data-mission-ribosomes-inventory',
+    '1',
+  );
+  await placeAndInspectStructure(
+    page,
+    mission,
+    recenter,
+    action,
+    'ribosomes',
+    /RIBOSOMES · INSPECT/,
+  );
+  await mineAndCollect(
+    page,
+    mission,
+    recenter,
+    action,
+    /MITOCHONDRIA SUPPLY/,
+    'data-mission-mitochondria-inventory',
+    '1',
+  );
+  await placeAndInspectStructure(
+    page,
+    mission,
+    recenter,
+    action,
+    'mitochondria',
+    /MITOCHONDRIA · INSPECT/,
+  );
+  await mineAndCollect(
+    page,
+    mission,
+    recenter,
+    action,
+    /CHLOROPLASTS SUPPLY/,
+    'data-mission-chloroplasts-inventory',
+    '1',
+  );
+  await placeAndInspectStructure(
+    page,
+    mission,
+    recenter,
+    action,
+    'chloroplasts',
+    /CHLOROPLASTS · INSPECT/,
+  );
+  await mineAndCollect(
+    page,
+    mission,
+    recenter,
+    action,
+    /LARGE CENTRAL VACUOLE SUPPLY/,
+    'data-mission-centralvacuole-inventory',
+    '1',
+  );
+  await approachUntil(
+    page,
+    mission,
+    recenter,
+    async () => (await mission.getAttribute('data-mission-recenter-stage')) === 'central-side',
+    16,
+  );
+  await approachUntil(
+    page,
+    mission,
+    recenter,
+    async () => (await mission.getAttribute('data-mission-recenter-stage')) === 'central-anchor',
+    16,
+  );
+  await placeAndInspectStructure(
+    page,
+    mission,
+    recenter,
+    action,
+    'centralvacuole',
+    /LARGE CENTRAL VACUOLE · INSPECT/,
+  );
+  await expect(mission).toHaveAttribute('data-mission-score', '80');
+  await page.screenshot({ path: test.info().outputPath('03-classroom-hydrated-cell.png') });
+
+  await approachAction(page, mission, recenter, 'remove', /LARGE CENTRAL VACUOLE · REMOVE/);
+  await holdCurrentAction(page, mission, action, () =>
+    expect(mission).toHaveAttribute('data-mission-correction', 'structure', { timeout: 5_000 }),
+  );
+  await approachAction(page, mission, recenter, 'collect', /LARGE CENTRAL VACUOLE DROP · COLLECT/);
+  await action.click();
+  await approachAction(
+    page,
+    mission,
+    recenter,
+    'place',
+    /VALID LARGE CENTRAL VACUOLE LOCATION · PLACE/,
+  );
+  await action.click();
+  await expect(mission).not.toHaveAttribute('data-mission-score', '80');
+  await approachAction(page, mission, recenter, 'inspect', /LARGE CENTRAL VACUOLE · INSPECT/);
+  await action.click();
+  await expect(mission).toHaveAttribute('data-mission-score', '80');
+
+  await approachAction(
+    page,
+    mission,
+    recenter,
+    'interact',
+    /WATER AVAILABILITY STATION · BEGIN CHALLENGE/,
+  );
+  await action.click();
+  await page.getByRole('button', { name: 'OVERVIEW' }).click();
+  await expect(mission).toHaveAttribute('data-mission-overview', 'true');
+  await expect(mission).toHaveAttribute('data-mission-score', '90');
+  await expect(
+    page.getByText(/Less turgor pressure · shrunken vacuole · wilted plant/),
+  ).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath('04-classroom-drought-overview.png') });
+  await page.getByRole('button', { name: 'CLOSE VIEW' }).click();
+  await approachAction(
+    page,
+    mission,
+    recenter,
+    'recover',
+    /WATER AVAILABILITY STATION · RESTORE WATER/,
+  );
+  await action.click();
+  await expect(mission).toHaveAttribute('data-mission-score', '95');
+  await page.getByRole('button', { name: 'OVERVIEW' }).click();
+  await expect(
+    page.getByText(/Turgor pressure restored · refilled vacuole · firm plant again/),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'CLOSE VIEW' }).click();
+  await expect(page.getByRole('button', { name: 'Submit the final graded result' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Submit the final graded result' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Stable cell achieved' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '100%' })).toBeVisible();
+  await expect(page.getByText('Saved on this iPad')).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('05-classroom-results.png'),
+    fullPage: true,
+  });
+  expect(apiRequests).toEqual([]);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+
+  await page.reload();
+  await page.getByLabel('First name').fill('Route');
+  await page.getByLabel('Last initial').fill('T');
+  await page.getByLabel('Class period').selectOption('3');
+  await expect(page.getByRole('button', { name: 'Continue to controls' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Continue to controls' }).click();
+  await expect(
+    page.getByText('A matching saved attempt is available on this device.'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Resume matching attempt' }).click();
+  await expect(page.getByRole('heading', { name: 'Stable cell achieved' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '100%' })).toBeVisible();
+  expect(apiRequests).toEqual([]);
 });

@@ -4,6 +4,7 @@ import {
   validateClientSubmissionPayloadV2,
   validateSaveEnvelopeV3,
 } from '../contracts/missionContracts';
+import { ASSIGNMENT } from '../data/assignment';
 import type {
   ClientSubmissionPayloadV2,
   PendingSubmissionV2,
@@ -60,6 +61,7 @@ export type PersistenceHealth =
 export type ResumeDecision =
   | { kind: 'none' }
   | { kind: 'one'; save: SaveEnvelopeV3 }
+  | { kind: 'handoff'; generation: number }
   | { kind: 'multiple' }
   | { kind: 'blocked'; code: string };
 
@@ -390,10 +392,9 @@ async function resumeDecisionInTransaction(
   if (current.attemptId !== record.attemptId) {
     return { kind: 'blocked', code: 'ACTIVE_ATTEMPT_POINTER_MISMATCH' };
   }
-  if (!resumeEligible(record.save)) return { kind: 'none' };
-  return normalizedIdentity(record.save.student) === normalizedIdentity(student)
-    ? { kind: 'one', save: clone(record.save) }
-    : { kind: 'none' };
+  const sameIdentity = normalizedIdentity(record.save.student) === normalizedIdentity(student);
+  if (sameIdentity && resumeEligible(record.save)) return { kind: 'one', save: clone(record.save) };
+  return { kind: 'handoff', generation: current.generation };
 }
 
 export async function resumeAttemptV3(student: StudentProfile): Promise<ActiveAttemptMetaV1> {
@@ -419,21 +420,16 @@ export async function resumeAttemptV3(student: StudentProfile): Promise<ActiveAt
   return clone(next);
 }
 
-export async function hideActiveAttemptForNewStudent(expectedAttemptId: string): Promise<boolean> {
-  const operationEpoch = persistenceEpoch;
-  const db = await openCellGameDatabase();
-  if (operationEpoch !== persistenceEpoch) throw new Error('PERSISTENCE_RESET');
-  const transaction = db.transaction(
-    ['attempts', 'meta', 'submissionQueue', 'receipts'],
-    'readwrite',
-  );
-  const current = await activeMeta(
-    transaction as unknown as IDBPTransaction<CellGameDbV2, ['meta'], 'readwrite'>,
-  );
-  if (expectedAttemptId && current.attemptId !== expectedAttemptId) {
-    await transaction.done;
-    return false;
-  }
+type NewStudentHandoffTransaction = IDBPTransaction<
+  CellGameDbV2,
+  ['attempts', 'meta', 'submissionQueue', 'receipts'],
+  'readwrite'
+>;
+
+async function clearCurrentAttemptForNewStudent(
+  transaction: NewStudentHandoffTransaction,
+  current: ActiveAttemptMetaV1,
+): Promise<void> {
   if (current.attemptId) {
     const attemptStore = transaction.objectStore('attempts');
     const record = await attemptStore.get(current.attemptId);
@@ -452,6 +448,44 @@ export async function hideActiveAttemptForNewStudent(expectedAttemptId: string):
     updatedAt: Date.now(),
   };
   await transaction.objectStore('meta').put(next, ACTIVE_ATTEMPT_META_KEY);
+}
+
+export async function hideActiveAttemptForNewStudent(expectedAttemptId: string): Promise<boolean> {
+  const operationEpoch = persistenceEpoch;
+  const db = await openCellGameDatabase();
+  if (operationEpoch !== persistenceEpoch) throw new Error('PERSISTENCE_RESET');
+  const transaction = db.transaction(
+    ['attempts', 'meta', 'submissionQueue', 'receipts'],
+    'readwrite',
+  );
+  const current = await activeMeta(
+    transaction as unknown as IDBPTransaction<CellGameDbV2, ['meta'], 'readwrite'>,
+  );
+  if (expectedAttemptId && current.attemptId !== expectedAttemptId) {
+    await transaction.done;
+    return false;
+  }
+  await clearCurrentAttemptForNewStudent(transaction, current);
+  await transaction.done;
+  return true;
+}
+
+export async function confirmNewStudentHandoff(expectedGeneration: number): Promise<boolean> {
+  const operationEpoch = persistenceEpoch;
+  const db = await openCellGameDatabase();
+  if (operationEpoch !== persistenceEpoch) throw new Error('PERSISTENCE_RESET');
+  const transaction = db.transaction(
+    ['attempts', 'meta', 'submissionQueue', 'receipts'],
+    'readwrite',
+  );
+  const current = await activeMeta(
+    transaction as unknown as IDBPTransaction<CellGameDbV2, ['meta'], 'readwrite'>,
+  );
+  if (current.attemptId === null || current.generation !== expectedGeneration) {
+    await transaction.done;
+    return false;
+  }
+  await clearCurrentAttemptForNewStudent(transaction, current);
   await transaction.done;
   return true;
 }
@@ -538,6 +572,11 @@ export class SaveCoordinator {
   private storageRevision: number;
   private readonly idleWaiters: Array<() => void> = [];
   private statusValue: SaveStatus;
+  private finalization: {
+    save: SaveEnvelopeV3;
+    payload: ClientSubmissionPayloadV2;
+    promise: Promise<SaveEnvelopeV3>;
+  } | null = null;
 
   private constructor(
     private readonly attemptId: string,
@@ -580,6 +619,9 @@ export class SaveCoordinator {
     if (save.attemptId !== this.attemptId) {
       return Promise.reject(new Error('SAVE_ATTEMPT_MISMATCH'));
     }
+    if (this.finalization) {
+      return Promise.reject(new Error('ATTEMPT_FINALIZATION_IN_PROGRESS'));
+    }
     try {
       assertValidSave(save);
       assertSaveContinuity(this.requestedHighWater, save);
@@ -603,6 +645,51 @@ export class SaveCoordinator {
   async flush(): Promise<void> {
     if (!this.running && !this.pending) return;
     await new Promise<void>((resolve) => this.idleWaiters.push(resolve));
+  }
+
+  finalizeAndQueue(
+    save: SaveEnvelopeV3,
+    payload: ClientSubmissionPayloadV2,
+    now = Date.now(),
+  ): Promise<SaveEnvelopeV3> {
+    if (this.finalization) {
+      return valuesEqual(this.finalization.save, save) &&
+        valuesEqual(this.finalization.payload, payload)
+        ? this.finalization.promise
+        : Promise.reject(new Error('ATTEMPT_FINALIZATION_CONFLICT'));
+    }
+    const promise = this.runFinalization(save, payload, now).catch((error) => {
+      this.finalization = null;
+      throw error;
+    });
+    this.finalization = { save: clone(save), payload: clone(payload), promise };
+    return promise;
+  }
+
+  private async runFinalization(
+    save: SaveEnvelopeV3,
+    payload: ClientSubmissionPayloadV2,
+    now: number,
+  ): Promise<SaveEnvelopeV3> {
+    if (this.epoch !== persistenceEpoch) throw new Error('PERSISTENCE_RESET');
+    if (save.attemptId !== this.attemptId) throw new Error('SAVE_ATTEMPT_MISMATCH');
+    assertValidSave(save);
+    assertSaveContinuity(this.requestedHighWater, save);
+    if (!save.gradedSnapshot || save.submissionStatus !== 'idle') {
+      throw new Error('ATTEMPT_FINALIZATION_REQUIRES_IDLE_GRADE');
+    }
+    await this.flush();
+    const storageRevision = this.storageRevision + 1;
+    await prepareSubmissionV2(save, payload, this.generation, storageRevision, now);
+    const queuedSave: SaveEnvelopeV3 = {
+      ...clone(save),
+      submissionStatus: 'queued',
+      savedAt: now,
+    };
+    this.storageRevision = storageRevision;
+    this.requestedHighWater = clone(queuedSave);
+    this.setStatus({ state: 'saved', storageRevision, savedAt: now });
+    return queuedSave;
   }
 
   private setStatus(status: SaveStatus): void {
@@ -668,7 +755,10 @@ function payloadMatchesGrade(save: SaveEnvelopeV3, payload: ClientSubmissionPayl
       period: payload.period,
     }) === normalizedIdentity(save.student) &&
     outcomeMatches &&
-    payload.activeTimeSeconds === Math.round(grade.activeElapsedMs / 1000) &&
+    payload.activeTimeSeconds ===
+      (grade.outcome === 'timeout'
+        ? ASSIGNMENT.durationSeconds
+        : Math.floor(grade.activeElapsedMs / 1000)) &&
     valuesEqual(payload.objectives, grade.objectives) &&
     valuesEqual(payload.hintsUsed, grade.hintsUsed)
   );
