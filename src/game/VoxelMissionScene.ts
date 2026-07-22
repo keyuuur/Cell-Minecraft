@@ -14,6 +14,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.pure';
 import '@babylonjs/core/Rendering/edgesRenderer';
 import { Scene } from '@babylonjs/core/scene.pure';
+import type { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import {
   MISSION_PREFAB_REGISTRY,
   validatePrefabCameraClearance,
@@ -32,6 +33,10 @@ import type {
   VoxelMissionSnapshotV1,
 } from '../types/game';
 import { MissionPrefabAssetRegistry } from './MissionPrefabAssetRegistry';
+import {
+  MissionPerformanceRecorder,
+  type MissionPerformanceDiagnosticsV1,
+} from './missionPerformanceDiagnostics';
 import { resolveMissionPresentation, type MissionRuntimePresentation } from './missionPresentation';
 import { BOUNDARY_SECTORS, nextBoundarySector, type BoundaryLayer } from '../voxel/boundaryAdapter';
 import {
@@ -64,6 +69,7 @@ const TARGET_INTERVAL = 0.08;
 const SNAPSHOT_INTERVAL = 0.12;
 const CENTRAL_VACUOLE_ENTRY_WAYPOINT = { x: 3, y: 1, z: 1 } as const;
 const CENTRAL_VACUOLE_SIDE_WAYPOINT = { x: 3, y: 1, z: -2 } as const;
+const PLANT_INDICATOR_POSITION = { x: -6, y: 0, z: 4 } as const;
 const MISSION_MODULE_IDS_FOR_HOTBAR: Partial<Record<string, MissionModuleId>> = {
   Digit2: 'cellWall',
   Digit3: 'cellMembrane',
@@ -136,6 +142,7 @@ export interface VoxelMissionSceneOptions {
   initialSnapshot?: VoxelMissionSnapshotV1;
   reducedMotion?: boolean;
   qualityMode?: QualityMode;
+  performanceDiagnostics?: boolean;
 }
 
 interface PrefabVisual {
@@ -286,6 +293,12 @@ export class VoxelMissionScene {
   private readonly reducedMotion: boolean;
   private readonly presentation: MissionRuntimePresentation;
   private readonly prefabAssets: MissionPrefabAssetRegistry;
+  private readonly performanceRecorder: MissionPerformanceRecorder | null;
+  private sceneInstrumentation: SceneInstrumentation | null = null;
+  private performanceInstrumentationRequested = false;
+  private performanceInstrumentationError = false;
+  private performanceSnapshot: MissionPerformanceDiagnosticsV1 | null = null;
+  private lastPerformanceRefresh = 0;
   private currentTarget: MissionTarget | null = null;
   private currentHit: VoxelRaycastHit | null = null;
   private currentViewModel: MissionViewModel;
@@ -332,6 +345,9 @@ export class VoxelMissionScene {
       },
     );
     this.reducedMotion = this.presentation.effectiveReducedMotion;
+    this.performanceRecorder = options.performanceDiagnostics
+      ? new MissionPerformanceRecorder(this.presentation)
+      : null;
     const initial = options.initialSnapshot ?? createInitialVoxelMissionSnapshot();
     this.renderWorld = createMissionWorld(initial, false);
     this.collisionWorld = createMissionWorld(initial, true);
@@ -414,6 +430,25 @@ export class VoxelMissionScene {
     this.emitSnapshot();
   }
 
+  private requestPerformanceInstrumentation(): void {
+    if (!this.performanceRecorder || this.performanceInstrumentationRequested || this.disposed) {
+      return;
+    }
+    this.performanceInstrumentationRequested = true;
+    void import('@babylonjs/core/Instrumentation/sceneInstrumentation')
+      .then(({ SceneInstrumentation: BabylonSceneInstrumentation }) => {
+        if (this.disposed || this.contextLost) return;
+        const instrumentation = new BabylonSceneInstrumentation(this.scene);
+        this.sceneInstrumentation = instrumentation;
+        this.refreshPerformanceDiagnostics();
+      })
+      .catch(() => {
+        if (this.disposed || this.contextLost) return;
+        this.performanceInstrumentationError = true;
+        this.refreshPerformanceDiagnostics();
+      });
+  }
+
   private material(name: string, color: string, alpha = 1): StandardMaterial {
     const key = `${name}:${color}:${alpha}`;
     const existing = this.materials.get(key);
@@ -470,7 +505,7 @@ export class VoxelMissionScene {
       ),
       ['cytoplasm', 'Cytoplasm control', CYTOPLASM_CONTROL_CELL],
       ['waterStation', 'Water availability station', WATER_STATION_CELL],
-      ['plantStatus', 'Plant condition: firm', { x: 7, y: 1, z: 8 }],
+      ['plantStatus', 'Plant condition: firm', PLANT_INDICATOR_POSITION],
     ];
     labels.forEach(([id, label, point]) => {
       const texture = new DynamicTexture(
@@ -506,7 +541,12 @@ export class VoxelMissionScene {
 
   private createPlantIndicator(): TransformNode {
     const root = new TransformNode('mission-plant-condition', this.scene);
-    root.position.set(7, 0, 8);
+    root.position.set(
+      PLANT_INDICATOR_POSITION.x,
+      PLANT_INDICATOR_POSITION.y,
+      PLANT_INDICATOR_POSITION.z,
+    );
+    const pot = this.pixelMaterial('mission-plant-pot-material', ['#8e5f3d', '#c88854', '#5a3c2b']);
     const stem = this.material('mission-plant-stem-material', '#39784a');
     const leaf = this.pixelMaterial('mission-plant-leaf-material', [
       '#4e9851',
@@ -515,9 +555,16 @@ export class VoxelMissionScene {
     ]);
     this.addPart(
       root,
+      'mission-plant-pot',
+      { width: 1.5, height: 0.65, depth: 1.15 },
+      new Vector3(0, 0.33, 0),
+      pot,
+    );
+    this.addPart(
+      root,
       'mission-plant-stem',
       { width: 0.35, height: 2.8, depth: 0.35 },
-      new Vector3(0, 1.4, 0),
+      new Vector3(0, 1.95, 0),
       stem,
     );
     for (const [index, [x, y, z]] of [
@@ -529,7 +576,7 @@ export class VoxelMissionScene {
         root,
         `mission-plant-leaf-${index}`,
         { width: 1.15, height: 0.38, depth: 0.72 },
-        new Vector3(x, y, z),
+        new Vector3(x, y + 0.55, z),
         leaf,
       );
     }
@@ -981,8 +1028,8 @@ export class VoxelMissionScene {
       visual.mesh.scaling.setAll(isActive ? 1.12 : 1);
       visual.mesh.setEnabled(isActive && !this.overview);
     }
-    this.plantIndicatorRoot.rotation.z = depleted ? 0.62 : 0;
-    this.plantIndicatorRoot.scaling.set(1, depleted ? 0.72 : 1, 1);
+    this.plantIndicatorRoot.rotation.z = depleted ? 0.92 : 0;
+    this.plantIndicatorRoot.scaling.set(1.35, depleted ? 0.7 : 1.35, 1.35);
   }
 
   private reconcileTool(snapshot: Readonly<VoxelMissionSnapshotV1>): void {
@@ -1013,8 +1060,15 @@ export class VoxelMissionScene {
     this.toolRoot.setEnabled(!enabled);
     this.targetOutline.setEnabled(false);
     this.invalidCross.setEnabled(false);
-    for (const visual of this.supplyLabels.values()) {
-      if (enabled) visual.mesh.setEnabled(false);
+    for (const [id, visual] of this.supplyLabels) {
+      if (!enabled) continue;
+      visual.mesh.setEnabled(id === 'plantStatus');
+      if (id === 'plantStatus') {
+        const snapshot = this.runtime.peek();
+        const wilted =
+          snapshot.homeostasis.droughtStarted && !snapshot.homeostasis.recoveryRestored;
+        this.drawLabel(id, wilted ? 'WILTED PLANT ↓' : 'FIRM PLANT ↑');
+      }
     }
     for (const pickup of this.pickupMeshes.values()) pickup.setEnabled(!enabled);
     const cytoplasmMaterial = this.cytoplasmFill.material as StandardMaterial;
@@ -1095,6 +1149,7 @@ export class VoxelMissionScene {
     this.runtime.stopForContextLoss();
     this.clearInput();
     this.stopRenderLoop();
+    this.clearOverviewSurface();
     this.callbacks.onContextLost();
     this.emitSnapshot();
   };
@@ -1113,6 +1168,7 @@ export class VoxelMissionScene {
       return;
     }
     this.lastTime = performance.now();
+    this.performanceRecorder?.resetAnimatedFrameBaseline();
     this.renderLoopRunning = true;
     this.engine.runRenderLoop(this.renderLoop);
   }
@@ -1121,11 +1177,52 @@ export class VoxelMissionScene {
     if (!this.renderLoopRunning) return;
     this.engine.stopRenderLoop(this.renderLoop);
     this.renderLoopRunning = false;
+    this.performanceRecorder?.resetAnimatedFrameBaseline();
   }
 
   private renderStaticFrame(): void {
     if (this.disposed || this.contextLost) return;
+    const startedAt = performance.now();
     this.scene.render();
+    if (this.overview) this.captureOverviewSurface();
+    const finishedAt = performance.now();
+    this.performanceRecorder?.recordFrame(startedAt, finishedAt, true, this.overview);
+    this.requestPerformanceInstrumentation();
+    this.refreshPerformanceDiagnostics(finishedAt);
+  }
+
+  private captureOverviewSurface(): void {
+    const host = this.canvas.parentElement;
+    if (!host) return;
+    try {
+      const snapshot = this.canvas.toDataURL('image/png');
+      if (!snapshot.startsWith('data:image/png;base64,') || snapshot.length < 1_000) {
+        host.dataset.overviewSurface = 'unavailable';
+        return;
+      }
+      host.style.backgroundImage = `url("${snapshot}")`;
+      host.style.backgroundPosition = 'center';
+      host.style.backgroundRepeat = 'no-repeat';
+      host.style.backgroundSize = '100% 100%';
+      host.dataset.overviewSurface = 'ready';
+      const base64 = snapshot.slice(snapshot.indexOf(',') + 1);
+      const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+      host.dataset.overviewSurfacePngBytes = String(Math.floor((base64.length * 3) / 4) - padding);
+    } catch {
+      host.dataset.overviewSurface = 'unavailable';
+      delete host.dataset.overviewSurfacePngBytes;
+    }
+  }
+
+  private clearOverviewSurface(): void {
+    const host = this.canvas.parentElement;
+    if (!host) return;
+    host.style.removeProperty('background-image');
+    host.style.removeProperty('background-position');
+    host.style.removeProperty('background-repeat');
+    host.style.removeProperty('background-size');
+    delete host.dataset.overviewSurface;
+    delete host.dataset.overviewSurfacePngBytes;
   }
 
   private render(): void {
@@ -1157,7 +1254,14 @@ export class VoxelMissionScene {
       this.fps = Number.isFinite(fps) ? Math.round(fps) : 0;
       this.emitSnapshot();
     }
+    const renderStartedAt = performance.now();
     this.scene.render();
+    const renderFinishedAt = performance.now();
+    this.performanceRecorder?.recordFrame(renderStartedAt, renderFinishedAt, false, false);
+    this.requestPerformanceInstrumentation();
+    if (renderFinishedAt - this.lastPerformanceRefresh >= 500) {
+      this.refreshPerformanceDiagnostics(renderFinishedAt);
+    }
   }
 
   private updateMovement(deltaSeconds: number): void {
@@ -1659,6 +1763,7 @@ export class VoxelMissionScene {
       this.stopRenderLoop();
       this.renderStaticFrame();
     } else if (this.overviewReturn) {
+      this.clearOverviewSurface();
       this.camera.position.copyFrom(this.overviewReturn.position);
       this.camera.rotation.copyFrom(this.overviewReturn.rotation);
       this.camera.fov = this.overviewReturn.fov;
@@ -1753,6 +1858,34 @@ export class VoxelMissionScene {
     });
   }
 
+  private refreshPerformanceDiagnostics(at = performance.now()): void {
+    if (!this.performanceRecorder || this.disposed) return;
+    const assets = this.prefabAssets.stats();
+    this.performanceSnapshot = this.performanceRecorder.snapshot({
+      instrumentationReady: this.sceneInstrumentation !== null,
+      instrumentationError: this.performanceInstrumentationError,
+      renderWidth: this.engine.getRenderWidth(),
+      renderHeight: this.engine.getRenderHeight(),
+      hardwareScalingLevel: this.engine.getHardwareScalingLevel(),
+      renderLoopActive: this.renderLoopRunning,
+      drawCalls: this.sceneInstrumentation?.drawCallsCounter.current ?? 0,
+      activeMeshes: this.scene.getActiveMeshes().length,
+      totalMeshes: this.scene.meshes.length,
+      totalVertices: this.scene.getTotalVertices(),
+      materials: this.scene.materials.length,
+      textures: this.scene.textures.length,
+      assetRequests: assets.requests,
+      assetFailures: assets.failures,
+      pendingAssetLoads: assets.pendingLoads,
+      activeAssetInstances: assets.activeInstances,
+    });
+    this.lastPerformanceRefresh = at;
+  }
+
+  performanceDiagnostics(): MissionPerformanceDiagnosticsV1 | null {
+    return this.performanceSnapshot ? structuredClone(this.performanceSnapshot) : null;
+  }
+
   resize(): void {
     if (this.disposed || this.contextLost) return;
     this.clearInput();
@@ -1763,6 +1896,7 @@ export class VoxelMissionScene {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.clearOverviewSurface();
     this.clearInput();
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
@@ -1773,6 +1907,10 @@ export class VoxelMissionScene {
     this.canvas.removeEventListener('lostpointercapture', this.handlePointerUp);
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
     this.stopRenderLoop();
+    this.sceneInstrumentation?.dispose();
+    this.sceneInstrumentation = null;
+    this.performanceRecorder?.dispose();
+    this.performanceSnapshot = null;
     this.prefabAssets.dispose();
     this.worldRenderer.dispose();
     this.scene.dispose();

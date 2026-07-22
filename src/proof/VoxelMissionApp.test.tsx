@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
@@ -98,6 +98,7 @@ describe('VoxelMissionApp modal safety', () => {
     expect(screen.queryByRole('dialog', { name: '0%' })).not.toBeInTheDocument();
     expect(root).toHaveAttribute('data-active-modal', 'none');
     expect(onPauseChange).toHaveBeenLastCalledWith(false);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'GRADE' })).toHaveFocus());
   });
 
   it('uses a non-dismissible finalization modal and then one isolated retry dialog', () => {

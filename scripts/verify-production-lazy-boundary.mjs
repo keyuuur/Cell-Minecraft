@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 const projectRoot = process.cwd();
 const distRoot = path.join(projectRoot, 'dist');
@@ -28,6 +29,54 @@ if (initialAssets.some((asset) => asset.endsWith(missionChunks[0]))) {
   throw new Error(`MISSION_CHUNK_IS_INITIAL:${missionChunks[0]}`);
 }
 
+const STATIC_IMPORT_BUDGET = {
+  rawBytes: 1_300_000,
+  gzipBytes: 335_000,
+};
+const initialAssetNames = new Set(initialAssets.map((asset) => path.basename(asset)));
+const staticMissionFiles = new Set();
+const pendingStaticImports = [missionChunks[0]];
+
+while (pendingStaticImports.length > 0) {
+  const file = pendingStaticImports.pop();
+  if (!file || staticMissionFiles.has(file) || initialAssetNames.has(file)) continue;
+  staticMissionFiles.add(file);
+  const source = await readFile(path.join(distRoot, 'assets', file), 'utf8');
+  const imports = [
+    ...source.matchAll(/\bfrom\s*["']\.\/([^"']+\.js)["']/g),
+    ...source.matchAll(/(?:^|[;\n])import\s*["']\.\/([^"']+\.js)["']/g),
+  ].map((match) => match[1]);
+  pendingStaticImports.push(...imports);
+}
+
+let staticMissionRawBytes = 0;
+let staticMissionGzipBytes = 0;
+for (const file of staticMissionFiles) {
+  const contents = await readFile(path.join(distRoot, 'assets', file));
+  staticMissionRawBytes += contents.byteLength;
+  staticMissionGzipBytes += gzipSync(contents).byteLength;
+}
+if (staticMissionRawBytes > STATIC_IMPORT_BUDGET.rawBytes) {
+  throw new Error(
+    `MISSION_STATIC_RAW_BUDGET_EXCEEDED:${staticMissionRawBytes}:${STATIC_IMPORT_BUDGET.rawBytes}`,
+  );
+}
+if (staticMissionGzipBytes > STATIC_IMPORT_BUDGET.gzipBytes) {
+  throw new Error(
+    `MISSION_STATIC_GZIP_BUDGET_EXCEEDED:${staticMissionGzipBytes}:${STATIC_IMPORT_BUDGET.gzipBytes}`,
+  );
+}
+
 process.stdout.write(
-  `${JSON.stringify({ initialAssets, lazyMissionChunk: missionChunks[0], status: 'passed' })}\n`,
+  `${JSON.stringify({
+    initialAssets,
+    lazyMissionChunk: missionChunks[0],
+    staticMissionJsDependencyClosure: {
+      files: staticMissionFiles.size,
+      rawBytes: staticMissionRawBytes,
+      gzipBytes: staticMissionGzipBytes,
+      budget: STATIC_IMPORT_BUDGET,
+    },
+    status: 'passed',
+  })}\n`,
 );

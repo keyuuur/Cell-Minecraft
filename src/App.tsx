@@ -62,6 +62,10 @@ const RESULTS_ACTION_FAILURE: Record<ResultsAction, string> = {
 };
 
 export default function App() {
+  const performanceDiagnostics = useMemo(
+    () => new URLSearchParams(window.location.search).get('diagnostics') === 'performance',
+    [],
+  );
   const screen = useIntegratedGameStore((state) => state.screen);
   const controls = useIntegratedGameStore((state) => state.controls);
   const qualityMode = useIntegratedGameStore((state) => state.qualityMode);
@@ -543,6 +547,7 @@ export default function App() {
               initialMission={voxelMission}
               controls={controls}
               qualityMode={qualityMode}
+              performanceDiagnostics={performanceDiagnostics}
               accessibility={accessibility}
               activeElapsedMs={activeElapsedMs}
               scoreBreakdown={scoreBreakdown}

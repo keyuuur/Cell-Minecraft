@@ -24,6 +24,7 @@ export interface MissionPrefabAssetStats {
   enabled: boolean;
   requests: number;
   failures: number;
+  pendingLoads: number;
   activeInstances: number;
 }
 
@@ -33,6 +34,7 @@ export class MissionPrefabAssetRegistry {
   private disposed = false;
   private requests = 0;
   private failures = 0;
+  private pendingLoads = 0;
   private activeInstances = 0;
 
   constructor(
@@ -45,10 +47,15 @@ export class MissionPrefabAssetRegistry {
     const cached = this.containers.get(id);
     if (cached) return cached;
     this.requests += 1;
-    const pending = this.loader(id, this.scene).catch(() => {
-      this.failures += 1;
-      return null;
-    });
+    this.pendingLoads += 1;
+    const pending = this.loader(id, this.scene)
+      .catch(() => {
+        this.failures += 1;
+        return null;
+      })
+      .finally(() => {
+        this.pendingLoads = Math.max(0, this.pendingLoads - 1);
+      });
     this.containers.set(id, pending);
     return pending;
   }
@@ -89,6 +96,7 @@ export class MissionPrefabAssetRegistry {
       enabled: this.enabled,
       requests: this.requests,
       failures: this.failures,
+      pendingLoads: this.pendingLoads,
       activeInstances: this.activeInstances,
     };
   }
@@ -100,6 +108,7 @@ export class MissionPrefabAssetRegistry {
       void pending.then((container) => container?.dispose());
     }
     this.containers.clear();
+    this.pendingLoads = 0;
     this.activeInstances = 0;
   }
 }

@@ -93,6 +93,7 @@ export interface VoxelMissionAppProps {
   initialMission?: VoxelMissionSnapshotV1;
   controls?: ControlProfile;
   qualityMode?: QualityMode;
+  performanceDiagnostics?: boolean;
   accessibility?: AccessibilitySettings;
   activeElapsedMs?: number;
   scoreBreakdown?: ScoreBreakdown;
@@ -143,6 +144,24 @@ function turgorDescription(mission: VoxelMissionSnapshotV1): string {
     return 'Turgor pressure restored · refilled vacuole · firm plant again';
   }
   return 'More turgor pressure · full vacuole · firm plant';
+}
+
+function plantConditionCue(mission: VoxelMissionSnapshotV1): {
+  state: 'pending' | 'firm' | 'wilted';
+  label: string;
+} {
+  if (!mission.homeostasis.vacuoleHydratedObserved) {
+    return { state: 'pending', label: 'Plant condition not yet observed' };
+  }
+  if (mission.homeostasis.droughtStarted && !mission.homeostasis.recoveryRestored) {
+    return { state: 'wilted', label: 'Wilted plant · leaves droop down' };
+  }
+  return {
+    state: 'firm',
+    label: mission.homeostasis.recoveryRestored
+      ? 'Firm plant restored · leaves stand up'
+      : 'Firm plant · leaves stand up',
+  };
 }
 
 function missionSemanticKey(mission: VoxelMissionSnapshotV1): string {
@@ -206,6 +225,19 @@ function MovementJoystick({
     onMove(0, 0);
   };
 
+  useEffect(() => {
+    if (!disabled) return;
+    const element = padRef.current;
+    const pointerId = pointerRef.current;
+    if (element && pointerId !== null && element.hasPointerCapture(pointerId)) {
+      element.releasePointerCapture(pointerId);
+    }
+    pointerRef.current = null;
+    onMove(0, 0);
+    const resetFrame = window.requestAnimationFrame(() => setThumb({ x: 0, y: 0 }));
+    return () => window.cancelAnimationFrame(resetFrame);
+  }, [disabled, onMove]);
+
   return (
     <div className="voxel-proof-joystick-wrap">
       <div
@@ -234,11 +266,10 @@ function MovementJoystick({
         onLostPointerCapture={release}
       >
         <span className="voxel-proof-joystick-arrows" aria-hidden="true">
-          UP
+          ↑
           <br />
-          LEFT&nbsp;&nbsp;RIGHT
-          <br />
-          DOWN
+          ←&nbsp;&nbsp;→
+          <br />↓
         </span>
         <span
           className="voxel-proof-joystick-thumb"
@@ -272,6 +303,7 @@ export default function VoxelMissionApp({
   initialMission = createInitialVoxelMissionSnapshot(),
   controls = 'touch-only',
   qualityMode = 'auto',
+  performanceDiagnostics = false,
   accessibility,
   activeElapsedMs = 0,
   scoreBreakdown,
@@ -290,6 +322,9 @@ export default function VoxelMissionApp({
 }: VoxelMissionAppProps = {}) {
   const classroom = mode === 'classroom';
   const missionRootRef = useRef<HTMLElement>(null);
+  const pauseButtonRef = useRef<HTMLButtonElement>(null);
+  const gradeButtonRef = useRef<HTMLButtonElement>(null);
+  const modalReturnFocusRef = useRef<HTMLElement | null>(null);
   const controllerRef = useRef<VoxelMissionController | null>(null);
   const suppressHeldClickRef = useRef(false);
   const pausedRef = useRef(Boolean(paused || externalInterruption));
@@ -340,6 +375,7 @@ export default function VoxelMissionApp({
   const stage = voxelMissionStage(mission);
   const structureCount = MISSION_STRUCTURE_ORDER.filter((id) => mission.placements[id]).length;
   const evidenceCount = MISSION_STRUCTURE_ORDER.filter((id) => mission.functionEvidence[id]).length;
+  const plantCue = plantConditionCue(mission);
   const holdable =
     snapshot.viewModel.primaryVerb === 'mine' || snapshot.viewModel.primaryVerb === 'remove';
   const invalid =
@@ -411,6 +447,7 @@ export default function VoxelMissionApp({
       snapshot.diagnostics.contextLost
     )
       return;
+    modalReturnFocusRef.current = gradeButtonRef.current;
     controllerRef.current?.setPaused(true);
     onPauseChange?.(true);
     setEarlyConfirm(false);
@@ -432,6 +469,7 @@ export default function VoxelMissionApp({
 
   useEffect(() => {
     if (!activeModal && !snapshot.diagnostics.overview) return;
+    if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
     suppressHeldClickRef.current = false;
     controllerRef.current?.clearInput();
   }, [activeModal, snapshot.diagnostics.overview]);
@@ -442,8 +480,9 @@ export default function VoxelMissionApp({
     const modal = root.querySelector<HTMLElement>(`[data-mission-modal="${activeModal}"]`);
     if (!modal) return;
 
-    const previousFocus =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!modalReturnFocusRef.current && document.activeElement instanceof HTMLElement) {
+      modalReturnFocusRef.current = document.activeElement;
+    }
     const isolated = Array.from(root.children)
       .filter((child): child is HTMLElement => child instanceof HTMLElement && child !== modal)
       .map((element) => ({
@@ -515,9 +554,19 @@ export default function VoxelMissionApp({
         if (record.ariaHidden === null) record.element.removeAttribute('aria-hidden');
         else record.element.setAttribute('aria-hidden', record.ariaHidden);
       }
-      if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, [activeModal, closeGrade, earlyConfirm, togglePause]);
+
+  useEffect(() => {
+    if (activeModal) return;
+    const returnFocus = modalReturnFocusRef.current;
+    if (!returnFocus) return;
+    modalReturnFocusRef.current = null;
+    const timeout = window.setTimeout(() => {
+      if (returnFocus.isConnected && !returnFocus.matches(':disabled')) returnFocus.focus();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [activeModal]);
 
   const currentHintLevel =
     hintState.objective === snapshot.viewModel.objective ? hintState.level : 0;
@@ -585,6 +634,8 @@ export default function VoxelMissionApp({
       data-mission-overview={snapshot.diagnostics.overview}
       data-mission-context-lost={contextLost || snapshot.diagnostics.contextLost}
       data-mission-quality={snapshot.diagnostics.quality}
+      data-mission-muted={Boolean(accessibility?.muted)}
+      data-mission-reduced-motion={Boolean(accessibility?.reducedMotion)}
       data-mission-render-size={`${snapshot.diagnostics.renderWidth}x${snapshot.diagnostics.renderHeight}`}
       data-mission-render-loop={snapshot.diagnostics.renderLoopActive ? 'active' : 'suspended'}
       data-mission-asset-requests={snapshot.diagnostics.assetRequests}
@@ -601,6 +652,7 @@ export default function VoxelMissionApp({
         initialMission={initialMission}
         reducedMotion={accessibility?.reducedMotion}
         qualityMode={qualityMode}
+        performanceDiagnostics={performanceDiagnostics}
         onContextLost={handleContextLost}
         onReady={handleReady}
         onSnapshot={handleSnapshot}
@@ -633,10 +685,12 @@ export default function VoxelMissionApp({
             ? `CHECKPOINT GRADE ${snapshot.score}/100`
             : `MODEL CHECKPOINT ${snapshot.score}/80`}
         </p>
-        <p className="voxel-proof-model-note">
-          Classroom model: supplies are prefabs, not organelle ores. Cytoplasm is a non-solid
-          interior fill. The nuclear membrane is visual only, not a ninth structure.
-        </p>
+        {!classroom ? (
+          <p className="voxel-proof-model-note">
+            Classroom model: supplies are prefabs, not organelle ores. Cytoplasm is a non-solid
+            interior fill. The nuclear membrane is visual only, not a ninth structure.
+          </p>
+        ) : null}
       </section>
 
       <div className="voxel-proof-utilities">
@@ -677,12 +731,20 @@ export default function VoxelMissionApp({
             >
               OVERVIEW
             </button>
-            <button type="button" onClick={togglePause} disabled={Boolean(activeModal)}>
+            <button
+              ref={pauseButtonRef}
+              type="button"
+              onClick={() => {
+                modalReturnFocusRef.current = pauseButtonRef.current;
+                togglePause();
+              }}
+              disabled={Boolean(activeModal)}
+            >
               {activeModal === 'pause' ? 'RESUME' : 'PAUSE'}
             </button>
             {classroom ? (
               <>
-                <button type="button" onClick={openGrade} disabled={disabled}>
+                <button ref={gradeButtonRef} type="button" onClick={openGrade} disabled={disabled}>
                   GRADE
                 </button>
                 <button
@@ -862,6 +924,15 @@ export default function VoxelMissionApp({
               ? turgorDescription(mission)
               : 'Close Overview to resume walking and building.'}
           </span>
+          {classroom ? (
+            <span className={`plant-condition-cue is-${plantCue.state}`}>
+              <span className="plant-condition-icon" aria-hidden="true">
+                <i />
+                <i />
+              </span>
+              <b>{plantCue.label}</b>
+            </span>
+          ) : null}
           {classroom ? <small>Close Overview to resume walking and building.</small> : null}
         </aside>
       ) : null}

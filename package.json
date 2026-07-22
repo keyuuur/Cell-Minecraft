@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:phase4-audit": "node scripts/build-phase4-audit.mjs",
     "preview": "vite preview",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
@@ -17,6 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:phase4-audit": "playwright test -c playwright.phase4-audit.config.ts",
+    "verify:phase4-audit-evidence": "node scripts/verify-phase4-audit-evidence.mjs",
     "test:e2e:visual": "playwright test e2e/visual-rollout.spec.ts",
     "assets:generate": "node scripts/generate-cell-prefabs.mjs",
     "assets:verify": "node scripts/verify-cell-prefabs.mjs",

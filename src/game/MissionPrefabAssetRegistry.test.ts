@@ -51,7 +51,12 @@ describe('mission prefab asset registry', () => {
       true,
     );
     expect(loader).toHaveBeenCalledOnce();
-    expect(registry.stats()).toMatchObject({ requests: 1, failures: 0, activeInstances: 2 });
+    expect(registry.stats()).toMatchObject({
+      requests: 1,
+      failures: 0,
+      pendingLoads: 0,
+      activeInstances: 2,
+    });
   });
 
   it('keeps the fallback when loading fails and never retries the failed asset', async () => {
@@ -64,7 +69,12 @@ describe('mission prefab asset registry', () => {
     expect(await registry.replaceFallback('ribosomes', parent, fallback, () => true)).toBe(false);
     expect(loader).toHaveBeenCalledOnce();
     expect(fallback.setEnabled).not.toHaveBeenCalled();
-    expect(registry.stats()).toMatchObject({ requests: 1, failures: 1, activeInstances: 0 });
+    expect(registry.stats()).toMatchObject({
+      requests: 1,
+      failures: 1,
+      pendingLoads: 0,
+      activeInstances: 0,
+    });
   });
 
   it('disposes late instances after removal instead of letting them reappear', async () => {

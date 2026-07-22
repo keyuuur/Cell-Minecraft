@@ -530,7 +530,7 @@ select option {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: 56px;
 }
 .toggle-row input {
   width: 24px;

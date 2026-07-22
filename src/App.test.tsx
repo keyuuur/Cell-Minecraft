@@ -122,12 +122,13 @@ async function startClassroomMission(
   user: ReturnType<typeof userEvent.setup>,
   student = { firstName: 'Ari', lastInitial: 'p', period: '3' },
 ) {
-  const continueButton = await findContinueButton();
+  await findContinueButton();
   await user.type(screen.getByLabelText('First name'), student.firstName);
   await user.type(screen.getByLabelText('Last initial'), student.lastInitial);
   await user.selectOptions(screen.getByLabelText('Class period'), student.period);
-  await waitFor(() => expect(continueButton).toBeEnabled());
-  await user.click(continueButton);
+  const readyContinueButton = await findContinueButton();
+  await waitFor(() => expect(readyContinueButton).toBeEnabled());
+  await user.click(readyContinueButton);
   await completeTutorial(user);
   await user.click(screen.getByRole('button', { name: 'Start mission and timer' }));
   await screen.findByRole('heading', { name: 'Mock voxel mission' });

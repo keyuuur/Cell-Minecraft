@@ -1,5 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { VoxelMissionScene, type VoxelMissionSceneSnapshot } from '../game/VoxelMissionScene';
+import {
+  MISSION_PERFORMANCE_BRIDGE_KEY,
+  type MissionPerformanceDiagnosticsBridge,
+} from '../game/missionPerformanceDiagnostics';
 import type { MissionHotbarItemId, QualityMode } from '../types/game';
 
 export interface VoxelMissionController {
@@ -17,6 +21,7 @@ interface VoxelMissionCanvasProps {
   initialMission?: VoxelMissionSceneSnapshot['mission'];
   reducedMotion?: boolean;
   qualityMode?: QualityMode;
+  performanceDiagnostics?: boolean;
   onContextLost: () => void;
   onReady: (controller: VoxelMissionController | null) => void;
   onSnapshot: (snapshot: VoxelMissionSceneSnapshot) => void;
@@ -27,6 +32,7 @@ export function VoxelMissionCanvas({
   initialMission,
   reducedMotion,
   qualityMode = 'auto',
+  performanceDiagnostics = false,
   onReady,
   onSnapshot,
 }: VoxelMissionCanvasProps) {
@@ -34,6 +40,7 @@ export function VoxelMissionCanvas({
   const initialMissionRef = useRef(initialMission);
   const reducedMotionRef = useRef(reducedMotion);
   const qualityModeRef = useRef(qualityMode);
+  const performanceDiagnosticsRef = useRef(performanceDiagnostics);
   const callbacksRef = useRef({ onContextLost, onReady, onSnapshot });
 
   useEffect(() => {
@@ -54,9 +61,26 @@ export function VoxelMissionCanvas({
         initialSnapshot: initialMissionRef.current,
         reducedMotion: reducedMotionRef.current,
         qualityMode: qualityModeRef.current,
+        performanceDiagnostics: performanceDiagnosticsRef.current,
       },
     );
     callbacksRef.current.onReady(controller);
+
+    type DiagnosticsWindow = Window & {
+      [MISSION_PERFORMANCE_BRIDGE_KEY]?: MissionPerformanceDiagnosticsBridge;
+    };
+    const diagnosticsWindow = window as DiagnosticsWindow;
+    const diagnosticsBridge = Object.freeze<MissionPerformanceDiagnosticsBridge>({
+      read: () => controller.performanceDiagnostics(),
+    });
+    if (performanceDiagnosticsRef.current) {
+      Object.defineProperty(diagnosticsWindow, MISSION_PERFORMANCE_BRIDGE_KEY, {
+        configurable: true,
+        enumerable: false,
+        value: diagnosticsBridge,
+        writable: false,
+      });
+    }
 
     const clearInput = () => controller.clearInput();
     const resize = () => {
@@ -79,6 +103,9 @@ export function VoxelMissionCanvas({
       window.removeEventListener('resize', resize);
       window.removeEventListener('orientationchange', resize);
       document.removeEventListener('visibilitychange', clearIfHidden);
+      if (diagnosticsWindow[MISSION_PERFORMANCE_BRIDGE_KEY] === diagnosticsBridge) {
+        delete diagnosticsWindow[MISSION_PERFORMANCE_BRIDGE_KEY];
+      }
       callbacksRef.current.onReady(null);
       controller.dispose();
     };
