@@ -1,7 +1,13 @@
 import type { AssignmentDefinition, PlaceableStructureId, StructureId } from '../types/game';
 
-export const GAME_VERSION = '0.1.0';
-export const SAVE_SCHEMA_VERSION = 2;
+export const GAME_VERSION = '0.2.0' as const;
+export const SAVE_SCHEMA_VERSION = 3 as const;
+export const SUBMISSION_CONTRACT_VERSION = 2 as const;
+
+// The still-deployed laboratory route must keep emitting its real V2/V1
+// contracts until Phase 4.5 replaces that route atomically.
+export const LEGACY_GAME_VERSION = '0.1.0' as const;
+export const LEGACY_SAVE_SCHEMA_VERSION = 2 as const;
 
 export const REQUIRED_STRUCTURES: StructureId[] = [
   'cellWall',

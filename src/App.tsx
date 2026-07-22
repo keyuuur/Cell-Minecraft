@@ -6,7 +6,7 @@ import { TutorialScreen } from './components/TutorialScreen';
 import { GameHud } from './components/GameHud';
 import { ResultsScreen } from './components/ResultsScreen';
 import { GameErrorBoundary } from './components/GameErrorBoundary';
-import { ASSIGNMENT, GAME_VERSION, SAVE_SCHEMA_VERSION } from './data/assignment';
+import { ASSIGNMENT, LEGACY_GAME_VERSION, LEGACY_SAVE_SCHEMA_VERSION } from './data/assignment';
 import {
   clearCompletedSave,
   clearIdentityForNewStudent,
@@ -27,8 +27,8 @@ function currentSave(): SaveEnvelope | null {
   const state = useGameStore.getState();
   if (!state.student) return null;
   return {
-    schemaVersion: SAVE_SCHEMA_VERSION,
-    gameVersion: GAME_VERSION,
+    schemaVersion: LEGACY_SAVE_SCHEMA_VERSION,
+    gameVersion: LEGACY_GAME_VERSION,
     assignmentId: ASSIGNMENT.id,
     assignmentVersion: ASSIGNMENT.version,
     sessionId: state.sessionId,

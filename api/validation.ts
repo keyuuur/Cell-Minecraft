@@ -1,4 +1,5 @@
 import type { ScoreBreakdown, SubmissionPayload } from '../src/types/game';
+import { calculateObjectiveScore } from '../src/biology/submissionScoring.js';
 
 const ALLOWED_ASSIGNMENTS = new Set(['build-a-living-cell-unit1']);
 const MAX_BODY_BYTES = 24_000;
@@ -198,6 +199,14 @@ export function serverScore(
         finalStability,
     ),
   };
+}
+
+/** Frozen contract-V2 scorer. The legacy V1 scorer above remains unchanged until cutover. */
+export function serverScoreV2(
+  objectives: Parameters<typeof calculateObjectiveScore>[0],
+  claimedComplete: boolean,
+): ScoreBreakdown {
+  return calculateObjectiveScore(objectives, claimedComplete);
 }
 
 function round(value: number): number {

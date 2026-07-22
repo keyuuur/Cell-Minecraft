@@ -1,6 +1,6 @@
 # Build a Living Cell — LLM Project Handoff
 
-Last updated: 2026-07-20
+Last updated: 2026-07-21
 
 ## 1. Project purpose and classroom audience
 
@@ -27,6 +27,9 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - Primary target: school iPad in landscape, approximately 1024 × 768.
 - Stack: Vite, React, TypeScript, Babylon.js, Zustand, IndexedDB, Google Apps Script/Sheets, and Vercel.
 - React owns screens and HUD; Babylon owns the stable scene and frame loop; pure TypeScript owns rules, scoring, and serializable state.
+- The integrated route will use `VoxelMissionSnapshotV1` as its sole mutable gameplay authority. `MissionState` remains a derived compatibility projection for scoring, HUD, and submission boundaries.
+- Integrated contract versions are game `0.2.0`, save schema `3`, and submission contract `2`. The preserved laboratory route remains explicitly game `0.1.0`, save schema `2`, and submission contract `1` until it is replaced atomically.
+- Active/practice V2 prototype saves will be detected but will not be spatially migrated after the V3 persistence flow is wired. The UI will offer diagnostic export and a fresh start; locked or queued V2 results remain eligible for bounded delivery compatibility.
 - Fixed `24 × 24 × 12` chamber, typed occupancy data, batched/instanced boundary visuals, broad placement zones, and no general chunk engine.
 - The approved presentation target is a bright, bounded voxel construction yard around the fixed chamber. First-person walking and drag-look, a center crosshair, an original visible builder pick, ray-targeted mining, a physical pickup, a nine-slot hotbar, and target-based placement are required gameplay verbs.
 - The first voxel checkpoint is an isolated, non-scoring proof route. It does not collect identity, run the graded timer, write IndexedDB mission state, submit results, or alter the existing verified mission state.
@@ -46,11 +49,14 @@ Out of scope: ER, Golgi apparatus, lysosomes, centrioles, vesicles, cytoskeleton
 - 2026-07-13: A submitted grade is now an immutable snapshot. Post-submission practice cannot change the recorded outcome.
 - 2026-07-14: The earlier plan to use a personal Gmail account was superseded. The project has no personal Gmail account; the dedicated Sheet and Apps Script backend are owned by the school-domain Google Workspace account.
 - 2026-07-19: The accepted dark laboratory, smooth procedural-organelles, proximity-depot interaction, and "no fourth visual pass" posture were superseded for presentation quality. They remain historical functional evidence only and are not evidence that the game meets its Minecraft-inspired gameplay target.
+- 2026-07-21: “Voxel Phase 4 complete” no longer means that the classroom mission is integrated or release-ready. It remains verified historical proof evidence for the practice-only structure adapter and scene. Phase 4.5 runtime unification must establish the single integrated gameplay authority before classroom integration resumes.
 
 ## 5. Verified repository, branch, commit, and deployment state
 
 - Repository: `https://github.com/keyuuur/Cell-Minecraft`
 - Active local branch: `codex/build-a-living-cell`
+- Dependency-remediation baseline: local HEAD and upstream were both clean at `26b492a772293d9b0f3f2892b46413edbf972690` when an independent final review returned **Not Ready**. The review found that the voxel proofs were not one integrated runtime and identified mandatory persistence, submission, privacy, Biology/UX, accessibility, performance, and repeatable-browser gates. Historical Phase 1–4 proof evidence remains valid only for its recorded bounded routes.
+- Remediation Phase 0 contract-freeze checkpoint: the verified source commit is pending this handoff update. The current local tree passed `npm run check` with formatting, ESLint, TypeScript, 25 Vitest files / 123 tests, and the production build; independent Sol architecture/data and Terra adversarial-QA re-gates both returned **GO with no actionable P0–P2 finding**. No Preview or Production promotion is part of this checkpoint.
 - Voxel-rebuild strategy baseline: local HEAD and upstream both matched `494ec1387ae58bbc6f4d314cfe0bd1e0d8fc2a7a` (`docs: close UI rollout`) before Phase 0.
 - Phase 0 strategy-reset start: `132c73ca83be94e0927bd827a173d1f63f4019bc` (`docs: start voxel gameplay rebuild`).
 - Phase 0 final planning checkpoint: `7bcc7cf` (`docs: checkpoint voxel rebuild phase 0`).
@@ -90,6 +96,17 @@ Record the handoff-checkpoint commit, upstream branch, and deployment URL after 
 - **Phase 4 — Complete Unit 1 mission:** all eight approved structures, full progression, eight visible function-evidence events, hydrated baseline, separated drought observation/diagnosis/recovery, accessibility settings, and original low-poly procedural visuals.
 - **Phase 5 — Classroom layer:** identification, periods 1–7, active timer, unlimited fresh attempts, checkpoint grade, confirmed early submission, immutable results, and ungraded practice.
 - **Phase 6 — Backend and resilience, local code:** validated submission contract, atomic save/queue preparation, reload-safe retry, idempotent Apps Script writes, append-only raw results, recoverable best-result reconciliation, formula-prefix neutralization, and test-row exclusion.
+
+### Remediation Phase 0 contract freeze verified 2026-07-21
+
+- `VoxelMissionSnapshotV1` is the frozen sole future gameplay authority: mission-specific player transform, fixed template/palette versions, boundary, conserved depot/inventory/pickup/placement state, prefab placements, homeostasis, correction, completion, and revision. The proof-only runtime snapshot, world edits, duplicate hotbar, and duplicate pickups are excluded.
+- Prefab rules use the actual Phase 3 chamber interior. Integer grid anchors, central-vacuole reservation, occupied footprints, non-overlap, interaction clearance, and player/placement separation are validated. The former Phase 4 `x=±6` proof coordinates are historical only and are not valid integrated placements.
+- Mission commands are intent-only and revision-bound. Caller-supplied targets cannot enter a command; the future scene must resolve the current bounded ray target, reject stale revisions, and make looking away a no-op.
+- `SaveEnvelopeV3` freezes exact student/settings/hint keys plus an immutable graded snapshot containing objectives, score, hints, outcome, mission revision, active time, and lock time. Fresh practice and post-grade ungraded practice are distinct; later practice revisions cannot change the recorded grade, objectives, hints, or active graded time.
+- Contract V2 uses one canonical rubric formula across mission, browser/proxy contracts, and the future server path. Empty, partial-wall, full-boundary, partial-internal, Phase 4, and completed states have parity fixtures. Legacy V1 scoring remains unchanged and explicitly recorded as a cutover risk.
+- `ClientSubmissionPayloadV2` rejects score, test classification, source environment, digest, and unknown fields. `ForwardedSubmissionPayloadV2` requires recomputed canonical score, server-owned environment/test classification, exact fields, and a verified SHA-256 digest.
+- Valid V2, corrupt V2, and unsupported persistence records are separated without spatial migration. The current `/` route continues to emit explicit game `0.1.0`, save schema `2`, and submission V1 values until the later atomic cutover.
+- `npm run check` passed formatting, ESLint, TypeScript, 25 Vitest files / 123 tests, and the production build. Independent Sol architecture/data and Terra adversarial-QA re-gates returned **GO with no actionable P0–P2 finding** after all initial findings were corrected.
 
 ### Voxel rebuild Phase 1 verified 2026-07-19
 
@@ -301,20 +318,19 @@ These are desktop/emulation results. They do not satisfy the physical-school-iPa
 
 ## 7. Current active phase and exact remaining work
 
-Active phase: **Approved voxel-adventure rebuild — Phase 4 complete structure mission verified; Phase 5 drought and classroom integration is next**.
+Active phase: **Phase 4.5 runtime unification — Remediation Phase 0 contract freeze passed locally**.
 
 The previous Five-Run, Three-Pass rollout is complete and none of its runs or six emails should be repeated. Its Biology, scoring, persistence, backend, accessibility, and classroom-flow evidence remains historical functional evidence.
 
-Phases 1–4 passed their code, production-isolation, real-control browser, original-resolution visual, Unit 1 Biology, classroom-fit, touch-recovery, graphics-loss, and independent swarm gates. The graded mission and backend remain preserved.
+Voxel Phases 1–4 passed their bounded proof-route gates. They do not prove one continuous classroom runtime: the Phase 3 reusable voxel foundation and the Phase 4 structure adapter still run through different scene/state paths, while `/` remains the legacy laboratory mission. The final review at clean `26b492a` therefore supersedes the earlier assumption that Phase 5 drought integration was the immediate next step.
 
-The next bounded work, when resumed, is Phase 5:
+The next bounded implementation work is Phase 4.5:
 
-1. Integrate the reversible reduced-water-availability sequence into the voxel mission: visible vacuole shrinkage, reduced turgor, wilting, external-water restoration, and recovery without introducing osmosis, tonicity, plasmolysis, equations, or a negative-feedback-loop claim.
-2. Connect the voxel route to the existing classroom layer through an explicit versioned migration: tutorial, identity, 15 active-minute timer, accessibility, hints, immutable results, ungraded practice, IndexedDB recovery, and submission contracts.
-3. Preserve nearby in-world function evidence, all eight approved structures, correction-credit restoration, original assets, input-reset behavior, 56 px controls, production isolation, and the fixed-world/no-chunk-engine boundary.
-4. Verify that reload, pause, background/orientation handling, post-timeout practice, and queued delivery cannot corrupt score, elapsed time, identity boundaries, or the Phase 4 spatial model.
-5. Add visible-control Chromium and emulated-WebKit evidence for drought diagnosis and recovery plus the classroom flow, while explicitly retaining physical-device and school-network gates.
-6. Keep Production unpromoted. Phase 5 must pass code, browser, visual, Biology, classroom, accessibility, persistence, privacy, and skeptical gates before a protected release candidate is created.
+1. Extract the reusable scene kernel from the verified boundary foundation and rewire all development proofs without behavior loss.
+2. Implement one `VoxelMissionScene` from the empty chamber through all eight structures, using ray-targeted mission commands and the canonical `VoxelMissionSnapshotV1` authority.
+3. Add footprint/clearance validation, non-solid full-volume cytoplasm, safe recovery placement or inventory fallback, and correction-credit restoration.
+4. Pass one continuous visible-control Chromium and emulated-WebKit route before beginning persistence or backend changes.
+5. Keep the legacy `/` route, V2 saves, V1 submissions, Production, live Sheet, and Apps Script deployment unchanged during Phase 4.5.
 
 ## 8. Known risks, failures, and blockers
 
@@ -326,7 +342,13 @@ The next bounded work, when resumed, is Phase 5:
 - **Payload risk:** Babylon is isolated in a lazy bundle but remains the largest download. Low mode and real-device evidence are mandatory before release.
 - **Rate limiting:** Apps Script rate limiting is best effort, not an authentication boundary. Assignment tokens remain routing data rather than secrets.
 - **Shared-iPad privacy risk:** a pending delivery necessarily preserves the earlier attempt payload, including its student identity, until a receipt arrives. Before classroom use, verify that starting a new student session cannot display or attach that prior identity while background delivery continues.
-- **Voxel-integration constraint:** Phase 4 completes the versioned, practice-only eight-structure scoring adapter while preserving the save envelope, payload, timer, identity, IndexedDB, backend, and graded mission. Phase 5 must migrate that serializable model explicitly rather than coupling Babylon runtime objects to persisted or submitted state.
+- **Voxel-integration constraint:** Phase 4 completes the versioned, practice-only eight-structure scoring adapter while preserving the save envelope, payload, timer, identity, IndexedDB, backend, and graded mission. Phase 4.5 must first unify that model with the reusable voxel runtime; the later persistence phase must then adopt the V3 aggregate explicitly without persisting Babylon objects.
+- **Final-review release blocker:** the clean `26b492a` branch is **Not Ready**. The practice proofs do not yet share one runtime with `/`, and their separate adapters cannot be treated as the integrated mission authority.
+- **Contract-transition risk:** globally relabeling the legacy laboratory envelope as schema 3 would make incompatible data appear current. Legacy constants remain explicit until an atomic route and persistence cutover passes its own gate.
+- **Legacy-save boundary:** V2 active/practice saves have no safe spatial migration into the new voxel world. They must be detected, exportable, and restarted rather than guessed into V3. No real student V2 gameplay data is known to exist; discovering any requires a stop and policy review.
+- **Legacy shared-device reset defect:** the current `clearLocalData()` path removes the visible save and receipts while intentionally preserving `submissionQueue`; it is not the separately warned, all-store teacher-device reset required by the V3 shared-iPad contract. The pending queue must remain identity-hidden while delivery continues until Phase 2 implements both flows explicitly.
+- **Legacy altered-duplicate defect:** Apps Script returns the original receipt for an exact repeated attempt, but an altered payload reusing that attempt ID is not immutable: the current flow can reconcile the altered non-test payload into `BestResults` before returning the old receipt. Phase 2 must reject it as `IDEMPOTENCY_CONFLICT` before any RawSubmissions or BestResults mutation.
+- **Legacy V1 partial-score drift:** the deployed `serverScore` grants the five placement-context points when the wall alone is complete, while the classroom rubric requires the completed outside-wall/inside-membrane relationship. Contract V2 freezes one shared canonical formula for mission, proxy, and backend scoring; the legacy V1 function remains unchanged until the atomic Phase 2 submission cutover.
 - **Emulation boundary:** Chromium's observed 66–69 FPS is a desktop-host measurement, and emulated iPad-landscape WebKit is functional browser evidence only. Neither may be reported as physical iPad Safari/WebGL performance.
 - **Visual-direction constraint:** Phase 1 passed the bright first-person block-building gate. Later phases must preserve it rather than collapsing back into the superseded dark laboratory or a decorative-pickaxe overlay.
 - **Biology-metaphor risk:** mining is limited to clearly labeled model-building supplies. Organelles are not ores, cytoplasm is not a mineable solid, and no recipe represents real cell construction.
@@ -335,6 +357,12 @@ The next bounded work, when resumed, is Phase 5:
 ## 9. Swarm review findings and coordinator decisions
 
 Independent read-only reviewers cover Biology/learning evidence, classroom game fit, and technical/release safety. The coordinator owns synthesis and implementation.
+
+**2026-07-21 dependency-remediation decision:** an independent final review of clean `26b492a` returned **Not Ready**. The coordinator accepted the dependency order: runtime unification; local persistence and submission safety; integrated classroom/drought mission; Biology/UX/accessibility/performance; repeatable local browser verification; protected Preview/backend verification; then physical iPad and classroom gates. Earlier GO decisions remain valid only for the exact bounded proof or rollout evidence they reviewed. They are not release approval for the integrated voxel game.
+
+**2026-07-21 Phase 0 uncommitted contract review:** independent architecture and QA review is a hard gate before the contract-freeze commit. The coordinator accepted the QA findings that the aggregate must remove duplicate proof-runtime authority and that V3 saves must enforce exact immutable grade, revision, active-time, settings, hint, and correction invariants. The existing V2/V1 classroom route remains explicitly isolated until the atomic integrated cutover.
+
+**2026-07-21 Phase 0 final re-gate:** initial reviewers returned NO-GO on duplicate runtime authority, incompatible Phase 4 coordinates, missing footprint/clearance and conservation invariants, caller-supplied targets, incomplete immutable grading/practice handling, permissive V2 classification, partial-score drift, unverified digest/score fields, and misleading legacy reset/idempotency wording. The coordinator corrected each finding, added adversarial fixtures, preserved the legacy route, and recorded the remaining V1 defects. Final Sol architecture/data and Terra adversarial-QA reviewers returned **GO with no actionable P0–P2 finding**; `npm run check` passed 25 files / 123 tests and the production build.
 
 Corrections implemented from the first review:
 
@@ -377,23 +405,25 @@ Final re-gate results:
 
 ## 10. Future phase sequence and acceptance gates
 
-1. **Phase 1 — isolated voxel proof (complete):** bright bounded yard, real first-person controls, target outline, original visible pick, mine/drop/collect/hotbar/place/remove/replace loop, original-resolution evidence, and swarm re-gate.
-2. **Phase 2 — voxel foundation (complete):** pure world/block/inventory models, tested grid raycast, collision and auto-step, regional dirty-mesh renderer, target-face placement, pooled pickups, rollback-safe item conservation, runtime save-schema planning, exact committed browser evidence, and no general chunk engine.
-3. **Phase 3 — boundary vertical slice (complete):** voxel plant-cell foundation, six outer wall modules, six inner membrane modules, transparent non-solid cytoplasm fill, invalid correction, scoring adapter, correction-credit restoration, dual-engine real-control browser evidence, and swarm re-gate.
-4. **Phase 4 — complete structure mission (complete):** original voxel prefabs for nucleus, ribosomes, mitochondria, chloroplasts, and central vacuole; broad placement zones; distinct in-world Unit 1 function evidence; invalid-placement conservation; physical recovery; full correction-credit restoration; dual-engine exact-SHA evidence; and swarm re-gate.
-5. **Phase 5 — drought and classroom integration (next):** reversible vacuole/turgor/wilt sequence, minimal HUD, real-world tutorial, accessibility, timer, hints, results, persistence migration, and backend compatibility.
-6. **Phase 6 — release candidate:** complete Chromium/WebKit matrices, protected Preview, backend regression, swarm audit, and new voxel-rebuild evidence packet.
-7. **Physical device and classroom:** oldest available iPad load/soak, typical iPad ≥30 FPS, touch-only simultaneous control, orientation/background/reload recovery, school Wi-Fi, hardware keyboard, ≥80% independent completion, ≥70% active game actions, and discoverable drought recovery.
+1. **Remediation Phase 0 — rebaseline and contract freeze (complete locally):** the Not Ready verdict, V3 voxel mission/save and V2 submission interfaces, legacy isolation, schema/invariant fixtures, canonical scoring, and independent review gates passed. Record the exact source SHA after commit/push.
+2. **Phase 4.5 — one voxel runtime (active):** one serializable authority and scene kernel from empty chamber through the approved eight structures, with ray targets, collision-safe prefab footprints, non-solid full-volume cytoplasm, safe recovery, correction restoration, and a continuous dual-engine visible-control gate.
+3. **Data safety:** per-attempt IndexedDB, serialized revisioned saves, local-first recovery, truthful save state, identity-safe shared-iPad resume/new-student/reset flows, single-flight queue delivery, immutable duplicate handling, server-owned test classification, and session-based collision visibility.
+4. **Integrated classroom mission:** replace `/` only after the first two implementation gates; connect tutorial, timer, hints, drought/recovery, immutable results, practice, autosave, and submission without reintroducing quiz interruptions or unsupported Biology depth.
+5. **Biology, UX, accessibility, visuals, and performance:** cutaway Overview, distinct structure cues, accessible/focus-safe modals, complete input clearing, terminal context loss, reduced-motion scene behavior, optimized original assets with Low-mode fallback, and no Babylon request before Start Mission.
+6. **Automated and protected-Preview release candidate:** exact-SHA quality checks, three consecutive zero-retry Chromium/WebKit matrices, black-box plus coordinate-assisted flows, protected Preview, explicit Sheet migration, and the synthetic rejection/retry/concurrency matrix. Production remains unpromoted.
+7. **Physical device and classroom:** oldest available iPad load/soak, typical iPad ≥30 FPS, touch-only simultaneous control, orientation/background/reload recovery, school Wi-Fi, hardware keyboard, VoiceOver/Switch Control exploration, ≥80% independent completion, ≥70% active game actions, and discoverable drought recovery.
 8. **Production:** promote only when all applicable gates are recorded as passed.
 
 Failed gates trigger correction and retest. No user approval is needed between these steps. Missing credentials, physical-device evidence, school-network evidence, or a required architecture/data-destination expansion are external blockers.
 
 ## 11. Backend/data destination status
 
-- Browser contract: implemented with versioned payloads, identity limits, attempt/session IDs, rubric breakdown, outcome flags, active time, hint data, versions, and `isTest`.
-- IndexedDB: versioned save envelope, migrations, five-second/event autosave, atomic queue preparation, queue replay, diagnostic export, and safe reset.
+- Browser contract currently deployed: legacy V1 with identity limits, attempt/session IDs, rubric breakdown, outcome flags, active time, hint data, versions, claimed score, and `isTest`. It remains frozen for compatibility and is not the approved final trust boundary.
+- Frozen future contract: browser-owned `ClientSubmissionPayloadV2` excludes score and `isTest`; server-owned `ForwardedSubmissionPayloadV2` adds recomputed score, environment-forced test classification, contract version, and canonical digest. Contract V2 uses one canonical rubric formula across empty, partial, and completed states. These Phase 0 contracts are not yet wired to the live proxy or Apps Script; legacy V1 scoring remains untouched until the atomic cutover.
+- Save contract currently deployed: legacy V2. Integrated voxel saves use V3 only after the per-attempt persistence gate; Phase 0 detection does not attempt spatial migration.
+- Legacy IndexedDB: one active V2 save, five-second/event autosave, atomic queue preparation, replay, and diagnostic export are implemented. The current New Student clearing path deliberately preserves pending delivery but is not the required all-store teacher reset; per-attempt V3 storage, identity-safe resume, save health/status, leases, and the warned teacher reset remain Phase 2 work.
 - Same-origin Vercel proxy: implemented at `/api/submit`; protected Preview-to-Apps-Script transport returned a valid accepted receipt after the ESM import fix.
-- Apps Script: source, validation, idempotency, locking, append-only `RawSubmissions`, derived `BestResults`, duplicate receipt recovery, reconciliation, sanitization, and runbook are implemented.
+- Apps Script: source, legacy validation, locking, append-only `RawSubmissions`, derived `BestResults`, exact-duplicate receipt recovery, reconciliation, sanitization, and runbook are implemented. Altered same-attempt payloads are not yet rejected immutably and can affect `BestResults`; contract-V2 digest conflict handling remains mandatory Phase 2 work.
 - Dedicated Sheet and deployed web app: live under the school-domain owner. The Sheet is private and has only `RawSubmissions` and `BestResults`; the web app executes as the owner and accepts anonymous requests guarded by the proxy key and validation.
 - Vercel environment values: Apps Script URL and proxy key are configured as Sensitive and Preview-only. Production remains unconfigured.
 - Live evidence: three append-only synthetic raw rows exist after the backend setup, one safe uncounted Preview attempt, and counted Run 5. All are `IsTest=TRUE`; the counted Run 5 duplicate retry returned the original receipt without a fourth row; and `BestResults` has zero data rows.
@@ -404,7 +434,7 @@ Failed gates trigger correction and retest. No user approval is needed between t
 1. Read current user instructions, the nearest `AGENTS.md`, `KEYUR_WORKFLOW.md`, and this file completely.
 2. Verify `git status`, current branch, HEAD/upstream, package lock, tests, GitHub Actions, deployment URLs, and backend state. Never trust stale prose over live evidence.
 3. Read the archived planning handoff only when a historical decision is missing here.
-4. Resume with voxel-rebuild Phase 5 as recorded in section 7. Do not rebuild or recount the passed Phase 1 proof, Phase 2 foundation, Phase 3 boundary slice, or Phase 4 structure mission unless their source changes. The Five-Run, Three-Pass rollout remains complete historical functional evidence at 5/5 counted runs, 3/3 visual passes, and 6/6 verified emails; do not rerun, recount, or resend it. The active presentation target is the bounded first-person voxel experience. Use read → plan → implement → test.
+4. Resume with the dependency-remediation phase recorded in section 7. After the Phase 0 checkpoint passes, the next implementation is Phase 4.5 runtime unification—not drought/classroom integration and not persistence/backend work. Do not rebuild or recount the passed Phase 1 proof, Phase 2 foundation, Phase 3 boundary slice, or Phase 4 structure proof unless their source changes; also do not mistake them for an integrated runtime. The Five-Run, Three-Pass rollout remains complete historical functional evidence at 5/5 counted runs, 3/3 visual passes, and 6/6 verified emails; do not rerun, recount, or resend it. Use read → plan → implement → test.
 5. In swarm mode, keep one implementation owner and independent read-only reviewers; route disagreement through the coordinator.
 6. After a passed gate, update sections 5–11 before commit/push. Rewrite current state and retain replaced decisions only in the short dated log.
 7. Never record credentials, OAuth details, student submissions, private names, or machine-local configuration.

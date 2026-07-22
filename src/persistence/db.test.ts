@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ASSIGNMENT, GAME_VERSION, SAVE_SCHEMA_VERSION } from '../data/assignment';
+import { ASSIGNMENT, LEGACY_GAME_VERSION, LEGACY_SAVE_SCHEMA_VERSION } from '../data/assignment';
 import { calculateScore } from '../biology/scoring';
 import { createInitialMission } from '../biology/rules';
 import {
@@ -15,8 +15,8 @@ import {
 import type { SaveEnvelope } from '../types/game';
 
 const save: SaveEnvelope = {
-  schemaVersion: SAVE_SCHEMA_VERSION,
-  gameVersion: GAME_VERSION,
+  schemaVersion: LEGACY_SAVE_SCHEMA_VERSION,
+  gameVersion: LEGACY_GAME_VERSION,
   assignmentId: ASSIGNMENT.id,
   assignmentVersion: ASSIGNMENT.version,
   sessionId: 'session-1',
@@ -46,7 +46,9 @@ describe('IndexedDB persistence', () => {
   });
 
   it('rejects saves from a future schema', () => {
-    expect(() => migrateSave({ ...save, schemaVersion: SAVE_SCHEMA_VERSION + 1 })).toThrow(/newer/);
+    expect(() => migrateSave({ ...save, schemaVersion: LEGACY_SAVE_SCHEMA_VERSION + 1 })).toThrow(
+      /newer/,
+    );
   });
 
   it('converts an interrupted sending state into a retryable queued state', () => {

@@ -1,4 +1,4 @@
-import { GAME_VERSION } from '../data/assignment';
+import { LEGACY_GAME_VERSION } from '../data/assignment';
 import { queueSubmission, queuedSubmissions, recordReceipt } from '../persistence/db';
 import type { SaveEnvelope, SubmissionPayload, SubmissionReceipt } from '../types/game';
 
@@ -14,7 +14,7 @@ export function payloadFromSave(
     sessionId: save.sessionId,
     assignmentId: save.assignmentId,
     assignmentVersion: save.assignmentVersion,
-    gameVersion: GAME_VERSION,
+    gameVersion: LEGACY_GAME_VERSION,
     score: save.score,
     completed: save.mission.completed,
     early: options.early,

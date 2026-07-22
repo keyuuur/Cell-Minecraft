@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   sanitizeSheetText,
   serverScore,
+  serverScoreV2,
   validatePayloadSize,
   validateSubmission,
   ValidationError,
@@ -52,6 +53,35 @@ describe('submission validation', () => {
   it('recomputes a complete score rather than trusting the client total', () => {
     expect(validateSubmission(validPayload).score.total).toBe(100);
     expect(serverScore(objectives, true).total).toBe(100);
+  });
+
+  it('keeps the V2 placement-context score at zero until wall and membrane are complete', () => {
+    expect(
+      serverScoreV2(
+        {
+          ...objectives,
+          membranePanels: 0,
+          cytoplasm: false,
+          nucleus: false,
+          ribosomes: false,
+          mitochondria: false,
+          chloroplasts: false,
+          centralVacuole: false,
+          droughtDiagnosed: false,
+          droughtObserved: false,
+          recoveryRestored: false,
+          effectCellWall: false,
+          effectCellMembrane: false,
+          effectCytoplasm: false,
+          effectNucleus: false,
+          effectRibosomes: false,
+          effectMitochondria: false,
+          effectChloroplasts: false,
+          effectCentralVacuole: false,
+        },
+        false,
+      ).placementContext,
+    ).toBe(0);
   });
 
   it('neutralizes spreadsheet formulas', () => {

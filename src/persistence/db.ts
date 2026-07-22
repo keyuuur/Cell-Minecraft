@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import { ASSIGNMENT, GAME_VERSION, SAVE_SCHEMA_VERSION } from '../data/assignment';
+import { ASSIGNMENT, LEGACY_GAME_VERSION, LEGACY_SAVE_SCHEMA_VERSION } from '../data/assignment';
 import type {
   PendingSubmission,
   SaveEnvelope,
@@ -148,13 +148,13 @@ function validateStoredSave(value: unknown): asserts value is SaveEnvelope {
 }
 
 export function migrateSave(save: SaveEnvelope): SaveEnvelope {
-  if (save.schemaVersion > SAVE_SCHEMA_VERSION) {
+  if (save.schemaVersion > LEGACY_SAVE_SCHEMA_VERSION) {
     throw new Error('This save was created by a newer version of the game.');
   }
   return {
     ...save,
-    schemaVersion: SAVE_SCHEMA_VERSION,
-    gameVersion: GAME_VERSION,
+    schemaVersion: LEGACY_SAVE_SCHEMA_VERSION,
+    gameVersion: LEGACY_GAME_VERSION,
     accessibility: {
       largeText: save.accessibility?.largeText ?? false,
       highContrast: save.accessibility?.highContrast ?? false,
