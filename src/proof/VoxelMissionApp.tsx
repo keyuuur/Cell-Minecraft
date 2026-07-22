@@ -15,6 +15,7 @@ import type {
   MissionHotbarItemId,
   MissionModuleId,
   PlaceableStructureId,
+  QualityMode,
   ScoreBreakdown,
   VoxelMissionSnapshotV1,
 } from '../types/game';
@@ -73,6 +74,13 @@ function sceneSnapshotFor(mission: VoxelMissionSnapshotV1): VoxelMissionSceneSna
       paused: false,
       overview: false,
       contextLost: false,
+      quality: 'standard',
+      renderWidth: 0,
+      renderHeight: 0,
+      renderLoopActive: false,
+      assetRequests: 0,
+      assetFailures: 0,
+      assetInstances: 0,
       cytoplasmSolidCells: 0,
       storageWrites: 0,
       apiRequests: 0,
@@ -84,11 +92,13 @@ export interface VoxelMissionAppProps {
   mode?: 'proof' | 'classroom';
   initialMission?: VoxelMissionSnapshotV1;
   controls?: ControlProfile;
+  qualityMode?: QualityMode;
   accessibility?: AccessibilitySettings;
   activeElapsedMs?: number;
   scoreBreakdown?: ScoreBreakdown;
   saveStatus?: SaveStatus | null;
   paused?: boolean;
+  externalInterruption?: 'orientation' | null;
   finalizing?: boolean;
   finalizationError?: string;
   onMissionSnapshot?: (mission: VoxelMissionSnapshotV1) => void;
@@ -261,11 +271,13 @@ export default function VoxelMissionApp({
   mode = 'proof',
   initialMission = createInitialVoxelMissionSnapshot(),
   controls = 'touch-only',
+  qualityMode = 'auto',
   accessibility,
   activeElapsedMs = 0,
   scoreBreakdown,
   saveStatus,
   paused,
+  externalInterruption = null,
   finalizing = false,
   finalizationError = '',
   onMissionSnapshot,
@@ -280,7 +292,7 @@ export default function VoxelMissionApp({
   const missionRootRef = useRef<HTMLElement>(null);
   const controllerRef = useRef<VoxelMissionController | null>(null);
   const suppressHeldClickRef = useRef(false);
-  const pausedRef = useRef(paused ?? false);
+  const pausedRef = useRef(Boolean(paused || externalInterruption));
   const lastForwardedAtRef = useRef(0);
   const lastSemanticKeyRef = useRef('');
   const [snapshot, setSnapshot] = useState(() => sceneSnapshotFor(initialMission));
@@ -317,10 +329,12 @@ export default function VoxelMissionApp({
   }, []);
 
   useEffect(() => {
-    if (paused === undefined) return;
-    pausedRef.current = paused;
-    controllerRef.current?.setPaused(paused);
-  }, [paused]);
+    const interrupted = Boolean(paused || externalInterruption);
+    pausedRef.current = interrupted;
+    suppressHeldClickRef.current = false;
+    controllerRef.current?.clearInput();
+    controllerRef.current?.setPaused(interrupted);
+  }, [externalInterruption, paused]);
 
   const mission = snapshot.mission;
   const stage = voxelMissionStage(mission);
@@ -332,6 +346,7 @@ export default function VoxelMissionApp({
     snapshot.target?.kind === 'voxel' &&
     mission.selectedHotbarItem !== 'builder-pick' &&
     !snapshot.diagnostics.placementValid;
+  const missionPaused = Boolean(paused || snapshot.diagnostics.paused);
   const activeModal =
     contextLost || snapshot.diagnostics.contextLost
       ? 'context-loss'
@@ -339,14 +354,16 @@ export default function VoxelMissionApp({
         ? 'finalization-error'
         : finalizing
           ? 'finalizing'
-          : gradeOpen
-            ? 'grade'
-            : snapshot.diagnostics.paused
-              ? 'pause'
-              : null;
+          : externalInterruption === 'orientation'
+            ? 'orientation'
+            : gradeOpen
+              ? 'grade'
+              : missionPaused
+                ? 'pause'
+                : null;
   const disabled =
     Boolean(activeModal) ||
-    snapshot.diagnostics.paused ||
+    missionPaused ||
     snapshot.diagnostics.overview ||
     contextLost ||
     snapshot.diagnostics.contextLost;
@@ -367,27 +384,57 @@ export default function VoxelMissionApp({
       gradeOpen ||
       finalizing ||
       finalizationError ||
+      externalInterruption ||
       contextLost ||
       snapshot.diagnostics.contextLost
     )
       return;
-    const next = !snapshot.diagnostics.paused;
+    const next = !missionPaused;
     controllerRef.current?.setPaused(next);
     onPauseChange?.(next);
-  }, [contextLost, finalizationError, finalizing, gradeOpen, onPauseChange, snapshot.diagnostics]);
+  }, [
+    contextLost,
+    externalInterruption,
+    finalizationError,
+    finalizing,
+    gradeOpen,
+    onPauseChange,
+    missionPaused,
+    snapshot.diagnostics.contextLost,
+  ]);
   const openGrade = useCallback(() => {
-    if (finalizing || finalizationError || contextLost || snapshot.diagnostics.contextLost) return;
+    if (
+      finalizing ||
+      finalizationError ||
+      externalInterruption ||
+      contextLost ||
+      snapshot.diagnostics.contextLost
+    )
+      return;
     controllerRef.current?.setPaused(true);
     onPauseChange?.(true);
     setEarlyConfirm(false);
     setGradeOpen(true);
-  }, [contextLost, finalizationError, finalizing, onPauseChange, snapshot.diagnostics.contextLost]);
+  }, [
+    contextLost,
+    externalInterruption,
+    finalizationError,
+    finalizing,
+    onPauseChange,
+    snapshot.diagnostics.contextLost,
+  ]);
   const closeGrade = useCallback(() => {
     setGradeOpen(false);
     setEarlyConfirm(false);
     controllerRef.current?.setPaused(false);
     onPauseChange?.(false);
   }, [onPauseChange]);
+
+  useEffect(() => {
+    if (!activeModal && !snapshot.diagnostics.overview) return;
+    suppressHeldClickRef.current = false;
+    controllerRef.current?.clearInput();
+  }, [activeModal, snapshot.diagnostics.overview]);
 
   useEffect(() => {
     const root = missionRootRef.current;
@@ -534,9 +581,15 @@ export default function VoxelMissionApp({
       data-mission-recovery={recoveryLabel(snapshot)}
       data-mission-action-held={snapshot.diagnostics.actionHeld}
       data-mission-action-progress={snapshot.diagnostics.actionProgress.toFixed(3)}
-      data-mission-paused={snapshot.diagnostics.paused}
+      data-mission-paused={missionPaused}
       data-mission-overview={snapshot.diagnostics.overview}
       data-mission-context-lost={contextLost || snapshot.diagnostics.contextLost}
+      data-mission-quality={snapshot.diagnostics.quality}
+      data-mission-render-size={`${snapshot.diagnostics.renderWidth}x${snapshot.diagnostics.renderHeight}`}
+      data-mission-render-loop={snapshot.diagnostics.renderLoopActive ? 'active' : 'suspended'}
+      data-mission-asset-requests={snapshot.diagnostics.assetRequests}
+      data-mission-asset-failures={snapshot.diagnostics.assetFailures}
+      data-mission-asset-instances={snapshot.diagnostics.assetInstances}
       data-mission-active-ms={classroom ? Math.floor(activeElapsedMs) : undefined}
       data-mission-save-state={classroom ? (saveStatus?.state ?? 'checking') : undefined}
       data-mission-cytoplasm-solid-cells={snapshot.diagnostics.cytoplasmSolidCells}
@@ -547,6 +600,7 @@ export default function VoxelMissionApp({
       <VoxelMissionCanvas
         initialMission={initialMission}
         reducedMotion={accessibility?.reducedMotion}
+        qualityMode={qualityMode}
         onContextLost={handleContextLost}
         onReady={handleReady}
         onSnapshot={handleSnapshot}
@@ -564,7 +618,7 @@ export default function VoxelMissionApp({
         <div className="boundary-layer-progress" aria-label="Integrated model progress">
           <span>WALL {mission.boundary.wallAnchors.length}/6</span>
           <span>MEMBRANE {mission.boundary.membraneAnchors.length}/6</span>
-          <span>STRUCTURES {structureCount}/5</span>
+          <span>INTERIOR COMPONENTS {structureCount}/5</span>
           <span>
             FUNCTIONS{' '}
             {evidenceCount +
@@ -586,50 +640,82 @@ export default function VoxelMissionApp({
       </section>
 
       <div className="voxel-proof-utilities">
-        <button type="button" onClick={() => controllerRef.current?.recenter()} disabled={disabled}>
-          RECENTER
-        </button>
-        <button
-          type="button"
-          onClick={() => controllerRef.current?.toggleOverview()}
-          disabled={snapshot.diagnostics.paused || contextLost}
-        >
-          {snapshot.diagnostics.overview ? 'CLOSE VIEW' : 'OVERVIEW'}
-        </button>
-        <button type="button" onClick={togglePause} disabled={Boolean(activeModal)}>
-          {snapshot.diagnostics.paused ? 'RESUME' : 'PAUSE'}
-        </button>
-        {classroom ? (
+        {snapshot.diagnostics.overview ? (
           <>
-            <button type="button" onClick={openGrade} disabled={disabled}>
-              GRADE
+            <button
+              type="button"
+              className="mission-overview-close"
+              onClick={() => controllerRef.current?.toggleOverview()}
+              disabled={missionPaused || contextLost}
+            >
+              CLOSE VIEW
+            </button>
+            {classroom ? (
+              <>
+                <span className="voxel-classroom-timer">
+                  {mission.completion.practice
+                    ? 'UNTIMED PRACTICE'
+                    : `${formatRemaining(activeElapsedMs)} LEFT`}
+                </span>
+                <span className="voxel-classroom-save">{saveStatusText(saveStatus)}</span>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => controllerRef.current?.recenter()}
+              disabled={disabled}
+            >
+              RECENTER
             </button>
             <button
               type="button"
-              onClick={() => {
-                const level = nextHintLevel;
-                setHintState({ objective: snapshot.viewModel.objective, level });
-                onUseHint?.(level);
-              }}
-              disabled={disabled || currentHintLevel >= 3}
+              onClick={() => controllerRef.current?.toggleOverview()}
+              disabled={missionPaused || contextLost}
             >
-              {currentHintLevel >= 3 ? 'HINT 3/3' : `HINT ${nextHintLevel}/3`}
+              OVERVIEW
             </button>
-            {mission.completion.practice ? (
-              <button type="button" onClick={onReturnToResults} disabled={finalizing}>
-                END PRACTICE
-              </button>
-            ) : null}
-            <span className="voxel-classroom-timer">
-              {mission.completion.practice
-                ? 'UNTIMED PRACTICE'
-                : `${formatRemaining(activeElapsedMs)} LEFT`}
-            </span>
-            <span className="voxel-classroom-save">{saveStatusText(saveStatus)}</span>
+            <button type="button" onClick={togglePause} disabled={Boolean(activeModal)}>
+              {activeModal === 'pause' ? 'RESUME' : 'PAUSE'}
+            </button>
+            {classroom ? (
+              <>
+                <button type="button" onClick={openGrade} disabled={disabled}>
+                  GRADE
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const level = nextHintLevel;
+                    setHintState({ objective: snapshot.viewModel.objective, level });
+                    onUseHint?.(level);
+                  }}
+                  disabled={disabled || currentHintLevel >= 3}
+                >
+                  {currentHintLevel >= 3 ? 'HINT 3/3' : `HINT ${nextHintLevel}/3`}
+                </button>
+                {mission.completion.practice ? (
+                  <button type="button" onClick={onReturnToResults} disabled={finalizing}>
+                    END PRACTICE
+                  </button>
+                ) : null}
+                <span className="voxel-classroom-timer">
+                  {mission.completion.practice
+                    ? 'UNTIMED PRACTICE'
+                    : `${formatRemaining(activeElapsedMs)} LEFT`}
+                </span>
+                <span className="voxel-classroom-save">{saveStatusText(saveStatus)}</span>
+              </>
+            ) : (
+              <span className="voxel-proof-fps">{snapshot.fps || '—'} FPS · DESKTOP/EMULATED</span>
+            )}
           </>
-        ) : (
-          <span className="voxel-proof-fps">{snapshot.fps || '—'} FPS · DESKTOP/EMULATED</span>
         )}
+        {snapshot.diagnostics.quality === 'low' ? (
+          <span className="mission-quality-badge">LOW MODE · REDUCED GRAPHICS</span>
+        ) : null}
       </div>
 
       {!snapshot.diagnostics.overview ? (
@@ -639,7 +725,7 @@ export default function VoxelMissionApp({
         </div>
       ) : null}
 
-      {snapshot.targetLabel ? (
+      {!snapshot.diagnostics.overview && snapshot.targetLabel ? (
         <div className="voxel-proof-target-label">{snapshot.targetLabel}</div>
       ) : null}
 
@@ -872,6 +958,27 @@ export default function VoxelMissionApp({
             <button type="button" autoFocus onClick={() => void onRetryFinalization?.()}>
               RETRY LOCAL FINALIZATION
             </button>
+          </div>
+        </section>
+      ) : null}
+
+      {activeModal === 'orientation' ? (
+        <section
+          className="voxel-proof-modal"
+          data-mission-modal="orientation"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mission-orientation-title"
+          aria-describedby="mission-orientation-description"
+          tabIndex={-1}
+        >
+          <div>
+            <p>MISSION INTERRUPTED · TIMER STOPPED</p>
+            <h2 id="mission-orientation-title">Rotate to landscape</h2>
+            <p id="mission-orientation-description">
+              Movement, looking, and held actions are cleared. {saveStatusText(saveStatus)}. After
+              rotating back, press Resume Mission before play continues.
+            </p>
           </div>
         </section>
       ) : null}

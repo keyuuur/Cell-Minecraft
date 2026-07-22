@@ -6,8 +6,16 @@ import {
   validateMissionTarget,
   validateVoxelMissionSnapshot,
 } from '../contracts/missionContracts';
-import { validatePrefabPlacements, validatePrefabPlayerSafety } from '../contracts/prefabRegistry';
-import { STRUCTURE_FUNCTIONS, STRUCTURE_LABELS } from '../data/assignment';
+import {
+  validatePrefabCameraClearance,
+  validatePrefabPlacements,
+  validatePrefabPlayerSafety,
+} from '../contracts/prefabRegistry';
+import {
+  STRUCTURE_FUNCTIONS,
+  STRUCTURE_LABELS,
+  STRUCTURE_VISIBLE_EFFECTS,
+} from '../data/assignment';
 import type {
   MissionCommand,
   MissionModuleId,
@@ -317,7 +325,8 @@ function placeSelectedModule(
     const candidatePlacements = { ...next.placements, [selected]: destination };
     if (
       !validatePrefabPlacements(candidatePlacements).valid ||
-      !validatePrefabPlayerSafety(candidatePlacements, next.player).valid
+      !validatePrefabPlayerSafety(candidatePlacements, next.player).valid ||
+      !validatePrefabCameraClearance(selected, destination, next.player).valid
     ) {
       return snapshot;
     }
@@ -369,7 +378,7 @@ function inspectTarget(
     snapshot,
     next,
     world,
-    `${STRUCTURE_FUNCTIONS[structureId]} Visible model evidence recorded.`,
+    `${STRUCTURE_FUNCTIONS[structureId]} ${STRUCTURE_VISIBLE_EFFECTS[structureId]}`,
   );
 }
 

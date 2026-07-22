@@ -261,6 +261,41 @@ select option {
   gap: 16px;
   margin: 22px 0;
 }
+.quality-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+.quality-choice-grid .choice-card {
+  min-height: 76px;
+  padding: 10px 12px;
+}
+.quality-choice-grid .choice-card strong {
+  font-size: 0.95rem;
+}
+.quality-choice-grid .choice-card span,
+.setting-note {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+.setting-note {
+  width: 100%;
+  margin: 0;
+}
+.tutorial-model-boundary {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-left: 4px solid var(--accent);
+  color: var(--text-muted);
+  background: #0c201b;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+.tutorial-model-boundary strong {
+  color: var(--accent);
+}
 .choice-card {
   min-height: 130px;
   display: grid;
@@ -1393,6 +1428,25 @@ select option {
     gap: 8px;
     margin: 6px 0;
   }
+  .quality-settings {
+    display: grid;
+  }
+  .quality-choice-grid {
+    gap: 6px;
+  }
+  .quality-choice-grid .choice-card {
+    min-height: 56px;
+    padding: 5px 8px;
+  }
+  .quality-choice-grid .choice-card span {
+    display: none;
+  }
+  .tutorial-model-boundary {
+    margin: 4px 0;
+    padding: 5px 8px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
   .choice-card {
     min-height: 76px;
     gap: 3px;
@@ -1512,6 +1566,7 @@ select option {
 
 @media (max-width: 640px) {
   .control-choice-grid,
+  .quality-choice-grid,
   .overview-status-grid {
     grid-template-columns: 1fr;
   }

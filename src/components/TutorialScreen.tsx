@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useIntegratedGameStore } from '../state/integratedGameStore';
-import type { ControlProfile } from '../types/game';
+import type { ControlProfile, QualityMode } from '../types/game';
 
 const controlOptions: Array<{ id: ControlProfile; title: string; description: string }> = [
   {
@@ -14,6 +14,24 @@ const controlOptions: Array<{ id: ControlProfile; title: string; description: st
     title: 'Touch Only',
     description:
       'Move with the left joystick. Drag the right side to look. Tap the action buttons.',
+  },
+];
+
+const qualityOptions: Array<{ id: QualityMode; title: string; description: string }> = [
+  {
+    id: 'auto',
+    title: 'Auto (recommended)',
+    description: 'Chooses Standard or Low from this device at mission start.',
+  },
+  {
+    id: 'low',
+    title: 'Low',
+    description: 'Uses a lower-cost scene for older or slower iPads.',
+  },
+  {
+    id: 'standard',
+    title: 'Standard',
+    description: 'Uses the full local model presentation on capable devices.',
   },
 ];
 
@@ -36,6 +54,8 @@ export function TutorialScreen({
 }: TutorialScreenProps) {
   const controls = useIntegratedGameStore((state) => state.controls);
   const setControls = useIntegratedGameStore((state) => state.setControls);
+  const qualityMode = useIntegratedGameStore((state) => state.qualityMode);
+  const setQualityMode = useIntegratedGameStore((state) => state.setQualityMode);
   const accessibility = useIntegratedGameStore((state) => state.accessibility);
   const updateAccessibility = useIntegratedGameStore((state) => state.updateAccessibility);
   const [practiced, setPracticed] = useState({
@@ -101,6 +121,31 @@ export function TutorialScreen({
             </button>
           ))}
         </div>
+
+        <fieldset className="settings-fieldset quality-settings">
+          <legend>Graphics quality</legend>
+          <div className="quality-choice-grid" role="radiogroup" aria-label="Graphics quality">
+            {qualityOptions.map((option) => (
+              <button
+                type="button"
+                key={option.id}
+                className={`choice-card ${qualityMode === option.id ? 'is-selected' : ''}`}
+                role="radio"
+                aria-checked={qualityMode === option.id}
+                onClick={() => setQualityMode(option.id)}
+              >
+                <strong>{option.title}</strong>
+                <span>{option.description}</span>
+              </button>
+            ))}
+          </div>
+          {qualityMode === 'low' ? (
+            <p className="setting-note" role="status">
+              Low mode changes graphics cost only. Biology content, objectives, and scoring stay the
+              same.
+            </p>
+          ) : null}
+        </fieldset>
 
         <div className="mission-loop" aria-label="Mission loop">
           <span>1. Navigate</span>
@@ -290,6 +335,12 @@ export function TutorialScreen({
             </div>
           </div>
         </section>
+
+        <aside className="tutorial-model-boundary" aria-label="Classroom model boundary">
+          <strong>Model boundary:</strong> supplies are prefabricated model parts, not organelle
+          ores. Cytoplasm is a non-solid interior fill. The nuclear membrane is visual inside the
+          nucleus and is not a ninth required component.
+        </aside>
 
         <fieldset className="settings-fieldset">
           <legend>Accessibility options</legend>

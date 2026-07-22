@@ -117,6 +117,58 @@ async function capture(page: Page, images: EvidenceImage[], file: string): Promi
   images.push({ file, sha256: createHash('sha256').update(buffer).digest('hex') });
 }
 
+async function expectMissionViewportAnchored(page: Page, mission: Locator): Promise<void> {
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('The mission viewport size was unavailable.');
+  await expect
+    .poll(() =>
+      mission.evaluate((root) => {
+        const rect = root.getBoundingClientRect();
+        return {
+          bodyScrollTop: Math.round(document.body.scrollTop),
+          documentScrollTop: Math.round(document.documentElement.scrollTop),
+          left: Math.round(rect.left),
+          scrollX: Math.round(window.scrollX),
+          scrollY: Math.round(window.scrollY),
+          top: Math.round(rect.top),
+          height: Math.round(rect.height),
+          width: Math.round(rect.width),
+        };
+      }),
+    )
+    .toEqual({
+      bodyScrollTop: 0,
+      documentScrollTop: 0,
+      left: 0,
+      scrollX: 0,
+      scrollY: 0,
+      top: 0,
+      height: viewport.height,
+      width: viewport.width,
+    });
+  await expect
+    .poll(() =>
+      mission.evaluate((root) => {
+        const isInside = (selector: string): boolean => {
+          const element = root.querySelector<HTMLElement>(selector);
+          if (!element || getComputedStyle(element).display === 'none') return true;
+          const rect = element.getBoundingClientRect();
+          return (
+            rect.top >= 10 &&
+            rect.left >= 0 &&
+            rect.right <= window.innerWidth &&
+            rect.bottom <= window.innerHeight
+          );
+        };
+        return {
+          objectiveInside: isInside('.voxel-proof-objective'),
+          utilitiesInside: isInside('.voxel-proof-utilities'),
+        };
+      }),
+    )
+    .toEqual({ objectiveInside: true, utilitiesInside: true });
+}
+
 async function holdJoystick(
   page: Page,
   direction: 'forward' | 'backward' | 'left' | 'right',
@@ -744,10 +796,32 @@ test('unified voxel mission latches graphics loss and rejects later visible inpu
   await expect(mission).toHaveAttribute('data-mission-score', frozen.score!);
   await expect(mission).toHaveAttribute('data-mission-pickups', frozen.pickups!);
   await expect(mission).toHaveAttribute('data-mission-wall-count', frozen.wall!);
+
+  await page.locator('canvas').evaluate((canvas) => {
+    const gl =
+      canvas.getContext('webgl2') ?? (canvas.getContext('webgl') as WebGLRenderingContext | null);
+    gl?.getExtension('WEBGL_lose_context')?.restoreContext();
+  });
+  await page.waitForTimeout(700);
+  await expect(page.getByRole('alertdialog')).toContainText('GRAPHICS CONTEXT LOST');
+  await expect(mission).toHaveAttribute('data-mission-context-lost', 'true');
+  await page.keyboard.down('w');
+  await page.keyboard.press('e');
+  await page.waitForTimeout(300);
+  await page.keyboard.up('w');
+  await expect(mission).toHaveAttribute('data-mission-revision', frozen.revision!);
+  await expect(mission).toHaveAttribute('data-mission-player', frozen.player!);
+  await expect(mission).toHaveAttribute('data-mission-score', frozen.score!);
+  await expect(mission).toHaveAttribute('data-mission-pickups', frozen.pickups!);
+  await expect(mission).toHaveAttribute('data-mission-wall-count', frozen.wall!);
 });
 
-async function completeClassroomTutorial(page: Page): Promise<void> {
+async function completeClassroomTutorial(
+  page: Page,
+  quality: 'low' | 'standard' = 'standard',
+): Promise<void> {
   await page.getByRole('radio', { name: /Touch Only/ }).click();
+  await page.getByRole('radio', { name: quality === 'low' ? /^Low/ : /^Standard/ }).click();
   const joystick = page.getByLabel('Practice movement joystick');
   const box = await joystick.boundingBox();
   if (!box) throw new Error('Tutorial joystick was not visible.');
@@ -828,6 +902,7 @@ test('integrated classroom route reaches one queued immutable 100 percent result
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   const apiRequests: string[] = [];
+  const modelRequests: string[] = [];
   const babylonRequestsBeforeStart: string[] = [];
   let missionStarted = false;
   page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -837,6 +912,7 @@ test('integrated classroom route reaches one queued immutable 100 percent result
   page.on('request', (request) => {
     const url = request.url();
     if (new URL(url).pathname.startsWith('/api/')) apiRequests.push(url);
+    if (new URL(url).pathname.startsWith('/models/')) modelRequests.push(url);
     if (
       !missionStarted &&
       (url.includes('@babylonjs') ||
@@ -860,7 +936,8 @@ test('integrated classroom route reaches one queued immutable 100 percent result
     page.getByRole('heading', { name: 'Choose and practice your controls' }),
   ).toBeVisible();
   await expect(page.locator('canvas')).toHaveCount(0);
-  await completeClassroomTutorial(page);
+  const quality = browserName === 'webkit' ? 'low' : 'standard';
+  await completeClassroomTutorial(page, quality);
   expect(babylonRequestsBeforeStart).toEqual([]);
   missionStarted = true;
   await page.getByRole('button', { name: 'Start mission and timer' }).click();
@@ -869,8 +946,10 @@ test('integrated classroom route reaches one queued immutable 100 percent result
   const recenter = page.getByRole('button', { name: 'RECENTER' });
   const action = page.locator('.mission-primary-action');
   await expect(mission).toHaveAttribute('data-mission-phase', 'boundary', { timeout: 30_000 });
+  await expect(mission).toHaveAttribute('data-mission-quality', quality);
   await expect(mission).toHaveAttribute('data-mission-score', '0');
   await approachAction(page, mission, recenter, 'mine', /CELL WALL PANELS SUPPLY/);
+  await expectMissionViewportAnchored(page, mission);
   await page.screenshot({ path: test.info().outputPath('01-classroom-mission-opening.png') });
 
   await page.getByRole('button', { name: 'PAUSE' }).click();
@@ -888,7 +967,7 @@ test('integrated classroom route reaches one queued immutable 100 percent result
   const gradeDialog = page.getByRole('dialog', { name: '0%' });
   await expect(gradeDialog).toBeVisible();
   await expect(
-    mission.locator('.voxel-proof-utilities button', { hasText: /^RESUME$/ }),
+    mission.locator('.voxel-proof-utilities button', { hasText: /^PAUSE$/ }),
   ).toBeDisabled();
   await expect
     .poll(() =>
@@ -908,6 +987,7 @@ test('integrated classroom route reaches one queued immutable 100 percent result
   await expect(returnToMission).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(returnToMission).toBeFocused();
+  await expectMissionViewportAnchored(page, mission);
   await page.screenshot({ path: test.info().outputPath('00-classroom-grade-modal.png') });
   await page.keyboard.press('Escape');
   await expect(gradeDialog).not.toBeVisible();
@@ -969,6 +1049,7 @@ test('integrated classroom route reaches one queued immutable 100 percent result
   await action.click();
   await approachAction(page, mission, recenter, 'inspect', /CYTOPLASM FULL-HEIGHT FILL · INSPECT/);
   await action.click();
+  await expectMissionViewportAnchored(page, mission);
   await page.screenshot({ path: test.info().outputPath('02-classroom-boundary-cytoplasm.png') });
 
   await mineAndCollect(
@@ -1063,7 +1144,25 @@ test('integrated classroom route reaches one queued immutable 100 percent result
     'centralvacuole',
     /LARGE CENTRAL VACUOLE · INSPECT/,
   );
+  if (quality === 'standard') {
+    await expect(mission).toHaveAttribute('data-mission-asset-requests', '5');
+    await expect(mission).toHaveAttribute('data-mission-asset-failures', '0');
+    await expect(mission).toHaveAttribute('data-mission-asset-instances', '5');
+    expect(modelRequests.map((url) => new URL(url).pathname).sort()).toEqual([
+      '/models/centralVacuole.gltf',
+      '/models/chloroplasts.gltf',
+      '/models/mitochondria.gltf',
+      '/models/nucleus.gltf',
+      '/models/ribosomes.gltf',
+    ]);
+  } else {
+    await expect(mission).toHaveAttribute('data-mission-asset-requests', '0');
+    await expect(mission).toHaveAttribute('data-mission-asset-failures', '0');
+    await expect(mission).toHaveAttribute('data-mission-asset-instances', '0');
+    expect(modelRequests).toEqual([]);
+  }
   await expect(mission).toHaveAttribute('data-mission-score', '80');
+  await expectMissionViewportAnchored(page, mission);
   await page.screenshot({ path: test.info().outputPath('03-classroom-hydrated-cell.png') });
 
   await approachAction(page, mission, recenter, 'remove', /LARGE CENTRAL VACUOLE · REMOVE/);
@@ -1084,6 +1183,11 @@ test('integrated classroom route reaches one queued immutable 100 percent result
   await approachAction(page, mission, recenter, 'inspect', /LARGE CENTRAL VACUOLE · INSPECT/);
   await action.click();
   await expect(mission).toHaveAttribute('data-mission-score', '80');
+  if (quality === 'standard') {
+    await expect(mission).toHaveAttribute('data-mission-asset-requests', '5');
+    await expect(mission).toHaveAttribute('data-mission-asset-instances', '5');
+    expect(modelRequests).toHaveLength(5);
+  }
 
   await approachAction(
     page,
@@ -1099,6 +1203,7 @@ test('integrated classroom route reaches one queued immutable 100 percent result
   await expect(
     page.getByText(/Less turgor pressure · shrunken vacuole · wilted plant/),
   ).toBeVisible();
+  await expectMissionViewportAnchored(page, mission);
   await page.screenshot({ path: test.info().outputPath('04-classroom-drought-overview.png') });
   await page.getByRole('button', { name: 'CLOSE VIEW' }).click();
   await approachAction(

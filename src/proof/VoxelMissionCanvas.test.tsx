@@ -10,6 +10,7 @@ interface SceneCallbacks {
 interface SceneOptions {
   initialSnapshot?: unknown;
   reducedMotion?: boolean;
+  qualityMode?: 'auto' | 'low' | 'standard';
 }
 
 interface SceneInstance {
@@ -64,6 +65,7 @@ describe('VoxelMissionCanvas', () => {
     const { rerender, unmount } = render(
       <VoxelMissionCanvas
         reducedMotion={false}
+        qualityMode="low"
         onContextLost={firstContextLoss}
         onReady={firstReady}
         onSnapshot={firstSnapshot}
@@ -72,6 +74,7 @@ describe('VoxelMissionCanvas', () => {
 
     expect(sceneHarness.calls).toHaveLength(1);
     expect(sceneHarness.calls[0].options.reducedMotion).toBe(false);
+    expect(sceneHarness.calls[0].options.qualityMode).toBe('low');
     expect(firstReady).toHaveBeenCalledWith(sceneHarness.calls[0].instance);
 
     const latestContextLoss = vi.fn();
@@ -80,6 +83,7 @@ describe('VoxelMissionCanvas', () => {
     rerender(
       <VoxelMissionCanvas
         reducedMotion
+        qualityMode="standard"
         onContextLost={latestContextLoss}
         onReady={latestReady}
         onSnapshot={latestSnapshot}
@@ -88,6 +92,7 @@ describe('VoxelMissionCanvas', () => {
 
     expect(sceneHarness.calls).toHaveLength(1);
     expect(sceneHarness.calls[0].options.reducedMotion).toBe(false);
+    expect(sceneHarness.calls[0].options.qualityMode).toBe('low');
 
     act(() => {
       sceneHarness.calls[0].callbacks.onContextLost();
@@ -102,5 +107,28 @@ describe('VoxelMissionCanvas', () => {
     unmount();
     expect(sceneHarness.calls[0].instance.dispose).toHaveBeenCalledOnce();
     expect(latestReady).toHaveBeenCalledWith(null);
+  });
+
+  it('clears held input across browser interruptions and resizes without replacing the scene', () => {
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const { unmount } = render(
+      <VoxelMissionCanvas onContextLost={vi.fn()} onReady={vi.fn()} onSnapshot={vi.fn()} />,
+    );
+    const scene = sceneHarness.calls[0].instance;
+
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+      window.dispatchEvent(new Event('pagehide'));
+      window.dispatchEvent(new Event('resize'));
+      window.dispatchEvent(new Event('orientationchange'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(scene.clearInput).toHaveBeenCalledTimes(5);
+    expect(scene.resize).toHaveBeenCalledTimes(2);
+    expect(sceneHarness.calls).toHaveLength(1);
+    unmount();
+    expect(scene.dispose).toHaveBeenCalledOnce();
+    visibility.mockRestore();
   });
 });

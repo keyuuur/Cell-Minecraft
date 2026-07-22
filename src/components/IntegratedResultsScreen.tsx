@@ -98,7 +98,7 @@ export function IntegratedResultsScreen({
         <section className="results-score score-panel" aria-labelledby="integrated-score-title">
           <div className="modal-heading">
             <div>
-              <p className="eyebrow">Checkpoint grade</p>
+              <p className="eyebrow">Final graded result</p>
               <h2 id="integrated-score-title">{Math.round(grade.score.total)}%</h2>
             </div>
           </div>

@@ -7,10 +7,5 @@ export default defineConfig({
     target: 'es2020',
     sourcemap: true,
     chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => (id.includes('@babylonjs/core') ? 'babylon' : undefined),
-      },
-    },
   },
 });

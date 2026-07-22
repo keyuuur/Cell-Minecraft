@@ -14,7 +14,12 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.pure';
 import '@babylonjs/core/Rendering/edgesRenderer';
 import { Scene } from '@babylonjs/core/scene.pure';
-import { MISSION_PREFAB_REGISTRY } from '../contracts/prefabRegistry';
+import {
+  MISSION_PREFAB_REGISTRY,
+  validatePrefabCameraClearance,
+  validatePrefabPlacements,
+  validatePrefabPlayerSafety,
+} from '../contracts/prefabRegistry';
 import { STRUCTURE_LABELS } from '../data/assignment';
 import type {
   MissionCommand,
@@ -23,8 +28,11 @@ import type {
   MissionTarget,
   MissionViewModel,
   PlaceableStructureId,
+  QualityMode,
   VoxelMissionSnapshotV1,
 } from '../types/game';
+import { MissionPrefabAssetRegistry } from './MissionPrefabAssetRegistry';
+import { resolveMissionPresentation, type MissionRuntimePresentation } from './missionPresentation';
 import { BOUNDARY_SECTORS, nextBoundarySector, type BoundaryLayer } from '../voxel/boundaryAdapter';
 import {
   MISSION_RECOMMENDED_PREFAB_ANCHORS,
@@ -74,6 +82,9 @@ const allInternalEvidenceForScene = (snapshot: Readonly<VoxelMissionSnapshotV1>)
     (id) => Boolean(snapshot.placements[id]) && snapshot.functionEvidence[id] === true,
   );
 
+const isPlaceableStructureId = (id: MissionModuleId): id is PlaceableStructureId =>
+  MISSION_STRUCTURE_ORDER.some((structureId) => structureId === id);
+
 export interface VoxelMissionDiagnostics {
   world: '24x12x24';
   revision: number;
@@ -94,6 +105,13 @@ export interface VoxelMissionDiagnostics {
   paused: boolean;
   overview: boolean;
   contextLost: boolean;
+  quality: MissionRuntimePresentation['quality'];
+  renderWidth: number;
+  renderHeight: number;
+  renderLoopActive: boolean;
+  assetRequests: number;
+  assetFailures: number;
+  assetInstances: number;
   cytoplasmSolidCells: 0;
   storageWrites: 0;
   apiRequests: 0;
@@ -117,12 +135,15 @@ export interface VoxelMissionSceneCallbacks {
 export interface VoxelMissionSceneOptions {
   initialSnapshot?: VoxelMissionSnapshotV1;
   reducedMotion?: boolean;
+  qualityMode?: QualityMode;
 }
 
 interface PrefabVisual {
   root: TransformNode;
+  fallback: TransformNode;
   evidence: TransformNode;
   key: string;
+  assetAttached: boolean;
 }
 
 interface LabelVisual {
@@ -263,11 +284,14 @@ export class VoxelMissionScene {
   private readonly membraneEvidenceRoot: TransformNode;
   private readonly plantIndicatorRoot: TransformNode;
   private readonly reducedMotion: boolean;
+  private readonly presentation: MissionRuntimePresentation;
+  private readonly prefabAssets: MissionPrefabAssetRegistry;
   private currentTarget: MissionTarget | null = null;
   private currentHit: VoxelRaycastHit | null = null;
   private currentViewModel: MissionViewModel;
   private targetLabel = '';
   private placementValid = false;
+  private cameraClearanceBlocked = false;
   private joystick = { x: 0, z: 0 };
   private pointerId: number | null = null;
   private pointerPoint = { x: 0, y: 0 };
@@ -278,8 +302,9 @@ export class VoxelMissionScene {
   private stopped = false;
   private contextLost = false;
   private disposed = false;
+  private renderLoopRunning = false;
   private overview = false;
-  private overviewReturn: { position: Vector3; rotation: Vector3 } | null = null;
+  private overviewReturn: { position: Vector3; rotation: Vector3; fov: number } | null = null;
   private lastRecenterPoint: VoxelPoint | null = null;
   private lastRecenterStage: VoxelMissionDiagnostics['recenterStage'] = 'normal';
   private lastTime = performance.now();
@@ -295,8 +320,18 @@ export class VoxelMissionScene {
   ) {
     this.canvas = canvas;
     this.callbacks = callbacks;
-    this.reducedMotion =
-      options.reducedMotion ?? window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const navigatorCapabilities = navigator as Navigator & { deviceMemory?: number };
+    this.presentation = resolveMissionPresentation(
+      options.qualityMode ?? 'auto',
+      options.reducedMotion,
+      {
+        deviceMemory: navigatorCapabilities.deviceMemory,
+        hardwareConcurrency: navigator.hardwareConcurrency,
+        devicePixelRatio: window.devicePixelRatio,
+        osReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      },
+    );
+    this.reducedMotion = this.presentation.effectiveReducedMotion;
     const initial = options.initialSnapshot ?? createInitialVoxelMissionSnapshot();
     this.renderWorld = createMissionWorld(initial, false);
     this.collisionWorld = createMissionWorld(initial, true);
@@ -307,15 +342,16 @@ export class VoxelMissionScene {
       {
         preserveDrawingBuffer: false,
         stencil: false,
-        powerPreference: 'high-performance',
+        powerPreference: this.presentation.quality === 'low' ? 'low-power' : 'high-performance',
         adaptToDeviceRatio: false,
       },
       true,
     );
-    this.engine.setHardwareScalingLevel(Math.max(1, window.devicePixelRatio / 1.5));
+    this.engine.setHardwareScalingLevel(this.presentation.hardwareScalingLevel);
     this.scene = new Scene(this.engine);
     this.scene.clearColor = Color4.FromHexString('#87d6f5ff');
-    this.scene.fogMode = Scene.FOGMODE_LINEAR;
+    this.scene.fogMode =
+      this.presentation.quality === 'low' ? Scene.FOGMODE_NONE : Scene.FOGMODE_LINEAR;
     this.scene.fogColor = Color3.FromHexString('#87d6f5');
     this.scene.fogStart = 19;
     this.scene.fogEnd = 35;
@@ -331,6 +367,10 @@ export class VoxelMissionScene {
     this.camera.rotation.set(initial.player.pitch, initial.player.yaw, 0);
     this.camera.inputs.clear();
     this.scene.activeCamera = this.camera;
+    this.prefabAssets = new MissionPrefabAssetRegistry(
+      this.scene,
+      this.presentation.quality === 'standard',
+    );
 
     const skyLight = new HemisphericLight(
       'voxel-mission-sky',
@@ -369,7 +409,7 @@ export class VoxelMissionScene {
     this.reconcileSnapshot();
     this.attachInput();
     canvas.addEventListener('webglcontextlost', this.handleContextLost, { passive: false });
-    this.engine.runRenderLoop(() => this.render());
+    this.startRenderLoop();
     if (!options.initialSnapshot) this.recenter();
     this.emitSnapshot();
   }
@@ -443,6 +483,10 @@ export class VoxelMissionScene {
       material.diffuseTexture = texture;
       material.emissiveColor = Color3.White();
       material.opacityTexture = texture;
+      // DynamicTexture is uploaded without a Y inversion, so correct the vertical texture axis
+      // once while the Y-only billboard keeps the plane upright and left-to-right readable.
+      texture.vScale = -1;
+      texture.vOffset = 1;
       material.backFaceCulling = false;
       const mesh = CreatePlane(
         `mission-label-plane-${id}`,
@@ -450,7 +494,9 @@ export class VoxelMissionScene {
         this.scene,
       );
       mesh.position.set(point.x, point.y + 2.3, point.z);
-      mesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
+      // Supply signs only need to turn around the vertical axis. A full billboard can roll
+      // upside down when the first-person camera looks above or below a raised label.
+      mesh.billboardMode = Mesh.BILLBOARDMODE_Y;
       mesh.material = material;
       mesh.isPickable = false;
       this.supplyLabels.set(id, { texture, material, mesh, lastText: '' });
@@ -560,6 +606,9 @@ export class VoxelMissionScene {
     fill.material = this.material('mission-cytoplasm-material', '#efd778', 0.14);
     fill.isPickable = false;
     fill.renderingGroupId = 1;
+    fill.enableEdgesRendering();
+    fill.edgesColor = Color4.FromHexString('#f9e99ccc');
+    fill.edgesWidth = 1.2;
     fill.setEnabled(false);
     return fill;
   }
@@ -624,19 +673,21 @@ export class VoxelMissionScene {
     const maximumX = Math.max(...footprint.map((cell) => cell.x));
     const maximumZ = Math.max(...footprint.map((cell) => cell.z));
     root.position.set(anchor.x + maximumX / 2, 0, anchor.z + maximumZ / 2);
+    const fallback = new TransformNode(`mission-prefab-fallback-${id}`, this.scene);
+    fallback.parent = root;
     const evidence = new TransformNode(`mission-prefab-evidence-${id}`, this.scene);
     evidence.parent = root;
 
     if (id === 'nucleus') {
       this.addPart(
-        root,
+        fallback,
         'mission-nucleus-core',
         { width: 1.65, height: 2.45, depth: 1.65 },
         new Vector3(0, 1.85, 0),
         this.pixelMaterial('mission-nucleus-core-material', ['#8955ae', '#b47bd2', '#573575']),
       );
       this.addPart(
-        root,
+        fallback,
         'mission-nuclear-membrane',
         { width: 1.9, height: 2.8, depth: 1.9 },
         new Vector3(0, 1.85, 0),
@@ -658,7 +709,7 @@ export class VoxelMissionScene {
     } else if (id === 'ribosomes') {
       for (let index = 0; index < 12; index += 1) {
         this.addPart(
-          root,
+          fallback,
           `mission-ribosome-${index}`,
           { width: 0.32, height: 0.32, depth: 0.32 },
           new Vector3(
@@ -678,52 +729,108 @@ export class VoxelMissionScene {
           this.material('mission-protein-chain-material', '#fff0a8'),
         );
       }
-    } else if (id === 'mitochondria' || id === 'chloroplasts') {
-      const mitochondria = id === 'mitochondria';
+    } else if (id === 'mitochondria') {
+      const bodyMaterial = this.pixelMaterial('mission-mitochondria-body-material', [
+        '#df704f',
+        '#ff9a6f',
+        '#8c3c31',
+      ]);
       this.addPart(
-        root,
-        `mission-${id}-body`,
-        { width: 1.78, height: 1.25, depth: 1.45 },
+        fallback,
+        'mission-mitochondria-center',
+        { width: 1.25, height: 1.05, depth: 1.18 },
         new Vector3(0, 1.45, 0),
-        this.pixelMaterial(
-          `mission-${id}-body-material`,
-          mitochondria ? ['#df704f', '#ff9a6f', '#8c3c31'] : ['#4f9a4e', '#76c15f', '#285f34'],
-        ),
+        bodyMaterial,
       );
-      const bandMaterial = this.pixelMaterial(
-        `mission-${id}-band-material`,
-        mitochondria ? ['#6f2e27', '#a84e3e', '#3e1b1a'] : ['#c4ed65', '#efff97', '#6f9e38'],
+      this.addPart(
+        fallback,
+        'mission-mitochondria-lobe-left',
+        { width: 0.68, height: 0.88, depth: 1.05 },
+        new Vector3(-0.72, 1.35, 0.08),
+        bodyMaterial,
       );
-      for (let index = 0; index < 3; index += 1) {
-        this.addPart(
-          root,
-          `mission-${id}-band-${index}`,
-          mitochondria
-            ? { width: 0.18, height: 0.95, depth: 1.5 }
-            : { width: 1.55, height: 0.18, depth: 0.32 },
-          mitochondria
-            ? new Vector3((index - 1) * 0.52, 1.45, 0)
-            : new Vector3(0, 1.15 + index * 0.3, (index - 1) * 0.38),
-          bandMaterial,
+      this.addPart(
+        fallback,
+        'mission-mitochondria-lobe-right',
+        { width: 0.72, height: 1.18, depth: 0.96 },
+        new Vector3(0.72, 1.52, -0.08),
+        bodyMaterial,
+      );
+      const ridgeMaterial = this.pixelMaterial('mission-mitochondria-ridge-material', [
+        '#6f2e27',
+        '#a84e3e',
+        '#3e1b1a',
+      ]);
+      for (let index = 0; index < 4; index += 1) {
+        const ridge = this.addPart(
+          fallback,
+          `mission-mitochondria-crista-${index}`,
+          { width: 0.42, height: 0.16, depth: 1.25 },
+          new Vector3((index - 1.5) * 0.42, 1.44 + (index % 2) * 0.18, 0),
+          ridgeMaterial,
         );
+        ridge.rotation.z = index % 2 === 0 ? 0.38 : -0.38;
       }
       for (let index = 0; index < 5; index += 1) {
         this.addPart(
           evidence,
-          `mission-${id}-effect-${index}`,
-          mitochondria
-            ? { width: 0.25, height: 0.42 + index * 0.13, depth: 0.25 }
-            : { width: 0.3, height: 0.3, depth: 0.3 },
-          new Vector3(index * 0.34 - 0.68, 2.2 + index * 0.1, 0),
-          this.material(`mission-${id}-effect-material`, mitochondria ? '#ffbc62' : '#fff36b'),
+          `mission-mitochondria-energy-bar-${index}`,
+          { width: 0.23, height: 0.4 + index * 0.12, depth: 0.23 },
+          new Vector3(index * 0.34 - 0.68, 2.25 + index * 0.08, 0),
+          this.material('mission-mitochondria-effect-material', '#ffbc62'),
+        );
+      }
+    } else if (id === 'chloroplasts') {
+      const bodyMaterial = this.pixelMaterial('mission-chloroplasts-body-material', [
+        '#4f9a4e',
+        '#76c15f',
+        '#285f34',
+      ]);
+      this.addPart(
+        fallback,
+        'mission-chloroplasts-lower-lens',
+        { width: 1.78, height: 0.42, depth: 1.22 },
+        new Vector3(0, 1.2, 0),
+        bodyMaterial,
+      );
+      this.addPart(
+        fallback,
+        'mission-chloroplasts-upper-lens',
+        { width: 1.48, height: 0.36, depth: 1.48 },
+        new Vector3(0, 1.58, 0),
+        bodyMaterial,
+      );
+      const granaMaterial = this.pixelMaterial('mission-chloroplasts-grana-material', [
+        '#c4ed65',
+        '#efff97',
+        '#6f9e38',
+      ]);
+      for (let stack = 0; stack < 3; stack += 1) {
+        for (let layer = 0; layer < 3; layer += 1) {
+          this.addPart(
+            fallback,
+            `mission-chloroplasts-grana-${stack}-${layer}`,
+            { width: 0.34, height: 0.1, depth: 0.48 },
+            new Vector3((stack - 1) * 0.5, 1.75 + layer * 0.13, 0),
+            granaMaterial,
+          );
+        }
+      }
+      for (let index = 0; index < 5; index += 1) {
+        this.addPart(
+          evidence,
+          `mission-chloroplasts-sunlight-tile-${index}`,
+          { width: 0.3, height: 0.3, depth: 0.3 },
+          new Vector3(index * 0.34 - 0.68, 2.3 + (index % 2) * 0.18, 0),
+          this.material('mission-chloroplasts-effect-material', '#fff36b'),
         );
       }
     } else {
       this.addPart(
-        root,
+        fallback,
         'mission-central-vacuole-body',
-        { width: 2.8, height: 3.8, depth: 2.8 },
-        new Vector3(0, 2.45, 0),
+        { width: 2.58, height: 3.55, depth: 2.58 },
+        new Vector3(0, 2.32, 0),
         this.pixelMaterial(
           'mission-central-vacuole-material',
           ['#53b6cf', '#8fe3ef', '#2a7f9a'],
@@ -757,9 +864,33 @@ export class VoxelMissionScene {
     evidence.setEnabled(observed);
     return {
       root,
+      fallback,
       evidence,
-      key: `${anchor.x},${anchor.y},${anchor.z}:${observed}`,
+      key: `${anchor.x},${anchor.y},${anchor.z}:asset-v1`,
+      assetAttached: false,
     };
+  }
+
+  private requestPrefabAsset(id: PlaceableStructureId, visual: PrefabVisual): void {
+    void this.prefabAssets
+      .replaceFallback(
+        id,
+        visual.root,
+        visual.fallback,
+        () => !this.disposed && this.prefabVisuals.get(id) === visual,
+      )
+      .then((attached) => {
+        if (!attached || this.disposed || this.prefabVisuals.get(id) !== visual) return;
+        visual.assetAttached = true;
+        if (!this.renderLoopRunning) this.renderStaticFrame();
+        this.emitSnapshot();
+      });
+  }
+
+  private disposePrefabVisual(id: PlaceableStructureId, visual: PrefabVisual): void {
+    if (visual.assetAttached) this.prefabAssets.releaseInstance();
+    visual.root.dispose(false, false);
+    if (this.prefabVisuals.get(id) === visual) this.prefabVisuals.delete(id);
   }
 
   private reconcilePrefabs(snapshot: Readonly<VoxelMissionSnapshotV1>): void {
@@ -768,15 +899,17 @@ export class VoxelMissionScene {
       const observed = snapshot.functionEvidence[id] === true;
       const existing = this.prefabVisuals.get(id);
       if (!anchor) {
-        existing?.root.dispose(false, false);
-        this.prefabVisuals.delete(id);
+        if (existing) this.disposePrefabVisual(id, existing);
         continue;
       }
-      const key = `${anchor.x},${anchor.y},${anchor.z}:${observed}`;
+      const key = `${anchor.x},${anchor.y},${anchor.z}:asset-v1`;
       if (existing?.key !== key) {
-        existing?.root.dispose(false, false);
-        this.prefabVisuals.set(id, this.createPrefabVisual(id, anchor, observed));
+        if (existing) this.disposePrefabVisual(id, existing);
+        const visual = this.createPrefabVisual(id, anchor, observed);
+        this.prefabVisuals.set(id, visual);
+        this.requestPrefabAsset(id, visual);
       }
+      this.prefabVisuals.get(id)?.evidence.setEnabled(observed);
       if (id === 'centralVacuole') {
         const visual = this.prefabVisuals.get(id);
         const depleted =
@@ -815,6 +948,7 @@ export class VoxelMissionScene {
         this.pickupMeshes.set(pickup.spawnSequence, mesh);
       }
       mesh.position.set(pickup.position.x, pickup.position.y, pickup.position.z);
+      mesh.setEnabled(!this.overview);
     });
   }
 
@@ -845,6 +979,7 @@ export class VoxelMissionScene {
       this.drawLabel(rawId, isActive ? `NEXT: ${base}` : base);
       visual.material.emissiveColor = Color3.FromHexString(isActive ? '#f4d35e' : '#ffffff');
       visual.mesh.scaling.setAll(isActive ? 1.12 : 1);
+      visual.mesh.setEnabled(isActive && !this.overview);
     }
     this.plantIndicatorRoot.rotation.z = depleted ? 0.62 : 0;
     this.plantIndicatorRoot.scaling.set(1, depleted ? 0.72 : 1, 1);
@@ -861,6 +996,7 @@ export class VoxelMissionScene {
     const snapshot = this.runtime.peek();
     this.cytoplasmFill.setEnabled(snapshot.boundary.cytoplasm === 'filled');
     const cytoplasmMaterial = this.cytoplasmFill.material as StandardMaterial;
+    cytoplasmMaterial.alpha = this.overview ? 0.055 : 0.14;
     cytoplasmMaterial.emissiveColor = Color3.FromHexString(
       snapshot.boundary.functionEvidence.cytoplasm ? '#806d2f' : '#514a27',
     );
@@ -870,6 +1006,20 @@ export class VoxelMissionScene {
     this.reconcilePickups(snapshot);
     this.reconcileLabels(snapshot);
     this.reconcileTool(snapshot);
+    this.setOverviewPresentation(this.overview);
+  }
+
+  private setOverviewPresentation(enabled: boolean): void {
+    this.toolRoot.setEnabled(!enabled);
+    this.targetOutline.setEnabled(false);
+    this.invalidCross.setEnabled(false);
+    for (const visual of this.supplyLabels.values()) {
+      if (enabled) visual.mesh.setEnabled(false);
+    }
+    for (const pickup of this.pickupMeshes.values()) pickup.setEnabled(!enabled);
+    const cytoplasmMaterial = this.cytoplasmFill.material as StandardMaterial;
+    cytoplasmMaterial.alpha = enabled ? 0.055 : 0.14;
+    if (!enabled) this.reconcileLabels(this.runtime.peek());
   }
 
   private attachInput(): void {
@@ -944,10 +1094,39 @@ export class VoxelMissionScene {
     this.paused = true;
     this.runtime.stopForContextLoss();
     this.clearInput();
-    this.engine.stopRenderLoop();
+    this.stopRenderLoop();
     this.callbacks.onContextLost();
     this.emitSnapshot();
   };
+
+  private readonly renderLoop = (): void => this.render();
+
+  private startRenderLoop(): void {
+    if (
+      this.renderLoopRunning ||
+      this.disposed ||
+      this.contextLost ||
+      this.stopped ||
+      this.paused ||
+      this.overview
+    ) {
+      return;
+    }
+    this.lastTime = performance.now();
+    this.renderLoopRunning = true;
+    this.engine.runRenderLoop(this.renderLoop);
+  }
+
+  private stopRenderLoop(): void {
+    if (!this.renderLoopRunning) return;
+    this.engine.stopRenderLoop(this.renderLoop);
+    this.renderLoopRunning = false;
+  }
+
+  private renderStaticFrame(): void {
+    if (this.disposed || this.contextLost) return;
+    this.scene.render();
+  }
 
   private render(): void {
     if (this.disposed) return;
@@ -1128,6 +1307,7 @@ export class VoxelMissionScene {
       this.currentTarget,
     );
     this.placementValid = false;
+    this.cameraClearanceBlocked = false;
     if (this.currentTarget?.kind === 'voxel' && snapshot.selectedHotbarItem !== 'builder-pick') {
       const preview = executeMissionCommand(
         snapshot as VoxelMissionSnapshotV1,
@@ -1136,6 +1316,20 @@ export class VoxelMissionScene {
         this.collisionWorld,
       );
       this.placementValid = preview !== snapshot;
+      if (!this.placementValid && isPlaceableStructureId(snapshot.selectedHotbarItem)) {
+        const destination = {
+          x: this.currentTarget.position.x + this.currentTarget.normal.x,
+          y: this.currentTarget.position.y + this.currentTarget.normal.y,
+          z: this.currentTarget.position.z + this.currentTarget.normal.z,
+        };
+        const id = snapshot.selectedHotbarItem;
+        const candidatePlacements = { ...snapshot.placements, [id]: destination };
+        this.cameraClearanceBlocked =
+          destination.y === 1 &&
+          validatePrefabPlacements(candidatePlacements).valid &&
+          validatePrefabPlayerSafety(candidatePlacements, snapshot.player).valid &&
+          !validatePrefabCameraClearance(id, destination, snapshot.player).valid;
+      }
       this.currentViewModel = {
         ...this.currentViewModel,
         primaryActionEnabled: this.placementValid,
@@ -1170,7 +1364,9 @@ export class VoxelMissionScene {
     }
     return this.placementValid
       ? `VALID ${STRUCTURE_LABELS[snapshot.selectedHotbarItem as MissionModuleId].toUpperCase()} LOCATION · PLACE`
-      : 'BLOCKED LOCATION × MOVE THE CROSSHAIR';
+      : this.cameraClearanceBlocked
+        ? 'STEP BACK TO PLACE · KEEP THE CAMERA CLEAR'
+        : 'BLOCKED LOCATION × MOVE THE CROSSHAIR';
   }
 
   private updateTargetMarker(snapshot: Readonly<VoxelMissionSnapshotV1>): void {
@@ -1226,7 +1422,13 @@ export class VoxelMissionScene {
   }
 
   private updateTool(deltaSeconds: number): void {
-    if (this.swingTime <= 0 || this.reducedMotion) {
+    if (this.reducedMotion) {
+      this.swingTime = 0;
+      this.toolRoot.rotation.x = -0.2;
+      this.toolRoot.rotation.z = -0.18;
+      return;
+    }
+    if (this.swingTime <= 0) {
       this.toolRoot.rotation.x += (-0.2 - this.toolRoot.rotation.x) * 0.18;
       this.toolRoot.rotation.z += (-0.18 - this.toolRoot.rotation.z) * 0.18;
       return;
@@ -1447,17 +1649,24 @@ export class VoxelMissionScene {
       this.overviewReturn = {
         position: this.camera.position.clone(),
         rotation: this.camera.rotation.clone(),
+        fov: this.camera.fov,
       };
-      this.camera.position.set(0, 10.2, 3.2);
-      this.camera.setTarget(new Vector3(0, 1.8, -3));
-      this.toolRoot.setEnabled(false);
       this.overview = true;
+      this.camera.position.set(1.4, 16.2, 9.2);
+      this.camera.fov = 1.03;
+      this.camera.setTarget(new Vector3(0.8, 1.15, -1.4));
+      this.setOverviewPresentation(true);
+      this.stopRenderLoop();
+      this.renderStaticFrame();
     } else if (this.overviewReturn) {
       this.camera.position.copyFrom(this.overviewReturn.position);
       this.camera.rotation.copyFrom(this.overviewReturn.rotation);
-      this.toolRoot.setEnabled(true);
+      this.camera.fov = this.overviewReturn.fov;
       this.overview = false;
       this.overviewReturn = null;
+      this.setOverviewPresentation(false);
+      this.updateTarget();
+      this.startRenderLoop();
     }
     this.emitSnapshot();
   }
@@ -1466,6 +1675,12 @@ export class VoxelMissionScene {
     if (this.stopped) return;
     this.clearInput();
     this.paused = paused;
+    if (paused) {
+      this.stopRenderLoop();
+      this.renderStaticFrame();
+    } else {
+      this.startRenderLoop();
+    }
     this.emitSnapshot();
   }
 
@@ -1474,6 +1689,9 @@ export class VoxelMissionScene {
     this.joystick = { x: 0, z: 0 };
     this.actionHeld = false;
     this.actionProgress = 0;
+    this.swingTime = 0;
+    this.toolRoot.rotation.x = -0.2;
+    this.toolRoot.rotation.z = -0.18;
     if (this.pointerId !== null) {
       try {
         if (this.canvas.hasPointerCapture(this.pointerId)) {
@@ -1489,6 +1707,7 @@ export class VoxelMissionScene {
   private emitSnapshot(): void {
     const snapshot = this.runtime.current();
     const renderer = this.worldRenderer.stats();
+    const assets = this.prefabAssets.stats();
     this.callbacks.onSnapshot({
       mission: snapshot,
       target: this.currentTarget ? structuredClone(this.currentTarget) : null,
@@ -1520,6 +1739,13 @@ export class VoxelMissionScene {
         paused: this.paused,
         overview: this.overview,
         contextLost: this.contextLost,
+        quality: this.presentation.quality,
+        renderWidth: this.engine.getRenderWidth(),
+        renderHeight: this.engine.getRenderHeight(),
+        renderLoopActive: this.renderLoopRunning,
+        assetRequests: assets.requests,
+        assetFailures: assets.failures,
+        assetInstances: assets.activeInstances,
         cytoplasmSolidCells: 0,
         storageWrites: 0,
         apiRequests: 0,
@@ -1528,8 +1754,10 @@ export class VoxelMissionScene {
   }
 
   resize(): void {
+    if (this.disposed || this.contextLost) return;
     this.clearInput();
     this.engine.resize();
+    if (!this.renderLoopRunning) this.renderStaticFrame();
   }
 
   dispose(): void {
@@ -1544,7 +1772,8 @@ export class VoxelMissionScene {
     this.canvas.removeEventListener('pointercancel', this.handlePointerUp);
     this.canvas.removeEventListener('lostpointercapture', this.handlePointerUp);
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
-    this.engine.stopRenderLoop();
+    this.stopRenderLoop();
+    this.prefabAssets.dispose();
     this.worldRenderer.dispose();
     this.scene.dispose();
     this.engine.dispose();

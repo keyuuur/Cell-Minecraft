@@ -297,6 +297,37 @@ export interface PrefabPlayerSafetyValidation {
   reason?: 'player-overlap' | 'player-trapped';
 }
 
+export interface PrefabCameraClearanceValidation {
+  valid: boolean;
+  reason?: 'camera-too-close';
+}
+
+export const PREFAB_CAMERA_CLEARANCE: Readonly<Record<PlaceableStructureId, number>> = {
+  nucleus: 0.82,
+  ribosomes: 0.82,
+  mitochondria: 0.82,
+  chloroplasts: 0.82,
+  centralVacuole: 1.08,
+};
+
+/** Keeps the first-person eye outside a padded visual envelope before placement mutates state. */
+export function validatePrefabCameraClearance(
+  id: PlaceableStructureId,
+  anchor: Point3,
+  player: Point3,
+): PrefabCameraClearanceValidation {
+  const cells = prefabOccupiedCells(id, anchor);
+  const minimumX = Math.min(...cells.map((cell) => cell.x)) - 0.5;
+  const maximumX = Math.max(...cells.map((cell) => cell.x)) + 0.5;
+  const minimumZ = Math.min(...cells.map((cell) => cell.z)) - 0.5;
+  const maximumZ = Math.max(...cells.map((cell) => cell.z)) + 0.5;
+  const gapX = Math.max(minimumX - player.x, 0, player.x - maximumX);
+  const gapZ = Math.max(minimumZ - player.z, 0, player.z - maximumZ);
+  return Math.hypot(gapX, gapZ) + 1e-9 >= PREFAB_CAMERA_CLEARANCE[id]
+    ? { valid: true }
+    : { valid: false, reason: 'camera-too-close' };
+}
+
 /** Validates the continuous player body and a walkable route back to the open front. */
 export function validatePrefabPlayerSafety(
   placements: Partial<Record<PlaceableStructureId, Point3>>,

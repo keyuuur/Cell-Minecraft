@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { VoxelMissionScene, type VoxelMissionSceneSnapshot } from '../game/VoxelMissionScene';
-import type { MissionHotbarItemId } from '../types/game';
+import type { MissionHotbarItemId, QualityMode } from '../types/game';
 
 export interface VoxelMissionController {
   action: () => void;
@@ -16,6 +16,7 @@ export interface VoxelMissionController {
 interface VoxelMissionCanvasProps {
   initialMission?: VoxelMissionSceneSnapshot['mission'];
   reducedMotion?: boolean;
+  qualityMode?: QualityMode;
   onContextLost: () => void;
   onReady: (controller: VoxelMissionController | null) => void;
   onSnapshot: (snapshot: VoxelMissionSceneSnapshot) => void;
@@ -24,13 +25,15 @@ interface VoxelMissionCanvasProps {
 export function VoxelMissionCanvas({
   onContextLost,
   initialMission,
-  reducedMotion = false,
+  reducedMotion,
+  qualityMode = 'auto',
   onReady,
   onSnapshot,
 }: VoxelMissionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const initialMissionRef = useRef(initialMission);
   const reducedMotionRef = useRef(reducedMotion);
+  const qualityModeRef = useRef(qualityMode);
   const callbacksRef = useRef({ onContextLost, onReady, onSnapshot });
 
   useEffect(() => {
@@ -47,7 +50,11 @@ export function VoxelMissionCanvas({
         onContextLost: () => callbacksRef.current.onContextLost(),
         onSnapshot: (snapshot) => callbacksRef.current.onSnapshot(snapshot),
       },
-      { initialSnapshot: initialMissionRef.current, reducedMotion: reducedMotionRef.current },
+      {
+        initialSnapshot: initialMissionRef.current,
+        reducedMotion: reducedMotionRef.current,
+        qualityMode: qualityModeRef.current,
+      },
     );
     callbacksRef.current.onReady(controller);
 

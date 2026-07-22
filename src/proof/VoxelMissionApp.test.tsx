@@ -137,4 +137,45 @@ describe('VoxelMissionApp modal safety', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'PAUSE', hidden: true })).toBeDisabled();
   });
+
+  it('uses one non-resumable orientation interruption and requires Pause resume afterward', async () => {
+    const user = userEvent.setup();
+    const onPauseChange = vi.fn();
+    const props: ComponentProps<typeof VoxelMissionApp> = {
+      mode: 'classroom',
+      initialMission: createInitialVoxelMissionSnapshot(),
+      controls: 'touch-only',
+      qualityMode: 'low',
+      accessibility: {
+        largeText: false,
+        highContrast: false,
+        reducedMotion: false,
+        muted: true,
+      },
+      activeElapsedMs: 0,
+      scoreBreakdown: zeroScore,
+      saveStatus: { state: 'saved', storageRevision: 1, savedAt: 1 },
+      paused: true,
+      externalInterruption: 'orientation',
+      onPauseChange,
+    };
+    const { rerender } = render(<VoxelMissionApp {...props} />);
+    const root = document.querySelector('main.voxel-mission');
+    if (!(root instanceof HTMLElement)) throw new Error('missing mission root');
+
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('dialog', { name: 'Rotate to landscape' })).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /RESUME MISSION/ })).not.toBeInTheDocument();
+    expect(root).toHaveAttribute('data-active-modal', 'orientation');
+    expect(canvasHarness.controller.clearInput).toHaveBeenCalled();
+    expect(canvasHarness.controller.setPaused).toHaveBeenLastCalledWith(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Rotate to landscape' })).toBeInTheDocument();
+
+    rerender(<VoxelMissionApp {...props} externalInterruption={null} />);
+    expect(screen.queryByRole('dialog', { name: 'Rotate to landscape' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Input is cleared' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'RESUME MISSION' }));
+    expect(onPauseChange).toHaveBeenLastCalledWith(false);
+  });
 });

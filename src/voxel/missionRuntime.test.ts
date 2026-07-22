@@ -15,6 +15,7 @@ import type {
   VoxelMissionSnapshotV1,
 } from '../types/game';
 import { BOUNDARY_SECTORS, type BoundaryLayer, type BoundarySector } from './boundaryAdapter';
+import { VoxelBlock } from './blocks';
 import { MISSION_STRUCTURE_ORDER } from './missionDefinition';
 import {
   activeMissionSupplies,
@@ -23,7 +24,7 @@ import {
   selectMissionViewModel,
   VoxelMissionRuntime,
 } from './missionRuntime';
-import { createMissionWorld } from './missionWorld';
+import { createMissionWorld, CYTOPLASM_CONTROL_CELL } from './missionWorld';
 import { raycastVoxel } from './raycastVoxel';
 
 function command(snapshot: VoxelMissionSnapshotV1, type: MissionCommand['type']): MissionCommand {
@@ -152,6 +153,25 @@ function completePhase45(): VoxelMissionSnapshotV1 {
 }
 
 describe('integrated voxel mission runtime', () => {
+  it('clears the used cytoplasm control pedestal from the entrance path', () => {
+    const before = completeBoundary();
+    expect(createMissionWorld(before, true).getOrAir(CYTOPLASM_CONTROL_CELL)).toBe(
+      VoxelBlock.ModelControl,
+    );
+
+    const activated = apply(before, 'interact', supplyTarget(before, 'cytoplasm'));
+    expect(activated.boundary.cytoplasm).toBe('filled');
+    expect(createMissionWorld(activated, true).getOrAir(CYTOPLASM_CONTROL_CELL)).toBe(
+      VoxelBlock.ModelControl,
+    );
+
+    const inspected = apply(activated, 'inspect', supplyTarget(activated, 'cytoplasm'));
+    expect(inspected.boundary.functionEvidence.cytoplasm).toBe(true);
+    expect(createMissionWorld(inspected, true).getOrAir(CYTOPLASM_CONTROL_CELL)).toBe(
+      VoxelBlock.Air,
+    );
+  });
+
   it('keeps the reserved central-vacuole floor anchor visible from the guided right lane', () => {
     const snapshot = createPhase4VoxelMissionFixture();
     delete snapshot.placements.centralVacuole;

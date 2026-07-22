@@ -64,6 +64,7 @@ const RESULTS_ACTION_FAILURE: Record<ResultsAction, string> = {
 export default function App() {
   const screen = useIntegratedGameStore((state) => state.screen);
   const controls = useIntegratedGameStore((state) => state.controls);
+  const qualityMode = useIntegratedGameStore((state) => state.qualityMode);
   const accessibility = useIntegratedGameStore((state) => state.accessibility);
   const activeElapsedMs = useIntegratedGameStore((state) => state.activeElapsedMs);
   const voxelMission = useIntegratedGameStore((state) => state.voxelMission);
@@ -268,6 +269,12 @@ export default function App() {
       document.removeEventListener('visibilitychange', visibility);
     };
   }, [saveCurrent]);
+
+  useEffect(() => {
+    if (screen !== 'mission' || !portrait) return;
+    setPaused(true);
+    void saveCurrent();
+  }, [portrait, saveCurrent, screen, setPaused]);
 
   const finalize = useCallback(
     async (nextOutcome: IntegratedOutcome) => {
@@ -535,11 +542,13 @@ export default function App() {
               mode="classroom"
               initialMission={voxelMission}
               controls={controls}
+              qualityMode={qualityMode}
               accessibility={accessibility}
               activeElapsedMs={activeElapsedMs}
               scoreBreakdown={scoreBreakdown}
               saveStatus={saveStatus}
-              paused={paused || portrait || contextLost}
+              paused={paused || contextLost}
+              externalInterruption={portrait ? 'orientation' : null}
               finalizing={finalizing}
               finalizationError={finalizationError}
               onMissionSnapshot={handleSceneSnapshot}
@@ -577,20 +586,6 @@ export default function App() {
         />
       ) : null}
 
-      {portrait && screen === 'mission' ? (
-        <div
-          className="orientation-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="orientation-title"
-        >
-          <div>
-            <h2 id="orientation-title">Rotate to landscape</h2>
-            <p>The active timer and controls are paused. {saveStatusTextForOverlay(saveStatus)}</p>
-          </div>
-        </div>
-      ) : null}
-
       {legacyRecoveryMessage && screen === 'identify' ? (
         <aside className="recovery-banner" role="status">
           <p>{legacyRecoveryMessage}</p>
@@ -601,14 +596,4 @@ export default function App() {
       ) : null}
     </div>
   );
-}
-
-function saveStatusTextForOverlay(
-  status: ReturnType<typeof useIntegratedGameStore.getState>['saveStatus'],
-) {
-  if (status?.state === 'saved') return 'The latest confirmed local save is available.';
-  if (status?.state === 'failed' || status?.state === 'unavailable') {
-    return 'Local saving is not confirmed; ask your teacher before closing the page.';
-  }
-  return 'A local save is being requested; do not close the page yet.';
 }

@@ -10,6 +10,18 @@
   grid-column: 1 / -1;
 }
 
+.mission-quality-badge {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  min-height: 28px;
+  padding: 6px 8px;
+  border: 2px solid #ffe287;
+  color: #fff2a8;
+  background: rgb(44 37 16 / 92%);
+  font-size: 0.66rem;
+  text-align: center;
+}
+
 .voxel-classroom-timer,
 .voxel-classroom-save {
   min-height: 28px;
@@ -73,19 +85,18 @@
 .mission-overview-note {
   position: absolute;
   z-index: 6;
-  top: 50%;
-  left: 50%;
+  top: max(18px, env(safe-area-inset-top));
+  left: max(18px, env(safe-area-inset-left));
   display: grid;
   gap: 4px;
-  width: min(360px, 58vw);
+  width: min(420px, calc(100vw - 250px));
   padding: 10px 14px;
-  transform: translate(-50%, -50%);
   border: 3px solid #fff2b0;
   color: #fffbe2;
   background: rgb(12 30 22 / 88%);
   box-shadow: 6px 6px 0 rgb(13 25 18 / 70%);
   font-size: 0.76rem;
-  text-align: center;
+  text-align: left;
   pointer-events: none;
 }
 
@@ -96,6 +107,26 @@
 .mission-overview-note small {
   color: #fff2b0;
   font-size: 0.68rem;
+}
+
+.voxel-mission[data-mission-overview='true'] .voxel-proof-objective,
+.voxel-mission[data-mission-overview='true'] .voxel-proof-feedback,
+.voxel-mission[data-mission-overview='true'] .voxel-classroom-hint,
+.voxel-mission[data-mission-overview='true'] .voxel-proof-joystick-wrap,
+.voxel-mission[data-mission-overview='true'] .mission-actions,
+.voxel-mission[data-mission-overview='true'] .mission-hotbar,
+.voxel-mission[data-mission-overview='true'] .voxel-proof-controls,
+.voxel-mission[data-mission-overview='true'] .voxel-proof-mining,
+.voxel-mission[data-mission-overview='true'] .mission-complete {
+  display: none;
+}
+
+.voxel-mission[data-mission-overview='true'] .voxel-proof-utilities {
+  grid-template-columns: minmax(176px, auto);
+}
+
+.voxel-mission[data-mission-overview='true'] .voxel-classroom-save {
+  grid-column: 1;
 }
 
 .voxel-classroom-grade > div {
@@ -156,7 +187,31 @@
 
 @media (max-height: 700px) {
   .voxel-mission .voxel-proof-objective {
-    width: min(480px, calc(100vw - 332px));
+    width: min(430px, calc(100vw - 332px));
+    padding: 7px 10px;
+  }
+
+  .voxel-mission .voxel-proof-objective h1 {
+    max-width: 34ch;
+    margin: 2px 0 4px;
+    font-size: 0.94rem;
+  }
+
+  .voxel-mission .voxel-proof-kicker {
+    font-size: 0.64rem;
+  }
+
+  .voxel-mission .voxel-proof-model-note {
+    display: none;
+  }
+
+  .voxel-mission .boundary-layer-progress {
+    gap: 3px;
+  }
+
+  .voxel-mission .boundary-layer-progress span,
+  .voxel-mission .boundary-checkpoint-score {
+    font-size: 0.68rem;
   }
 
   .voxel-mission .mission-complete {
@@ -175,6 +230,14 @@
 
   .voxel-grade-breakdown div {
     padding: 3px 0;
+  }
+
+  .mission-overview-note {
+    top: 10px;
+    left: 10px;
+    width: min(390px, calc(100vw - 220px));
+    padding: 8px 10px;
+    font-size: 0.68rem;
   }
 }
 

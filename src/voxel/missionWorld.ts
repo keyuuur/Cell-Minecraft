@@ -115,7 +115,9 @@ export function syncMissionWorld(
     const id = rawId as MissionModuleId;
     if (snapshot.depotInventory[id] > 0) world.set(cell, supplyBlock(id));
   }
-  world.set(CYTOPLASM_CONTROL_CELL, VoxelBlock.ModelControl);
+  if (!snapshot.boundary.functionEvidence.cytoplasm) {
+    world.set(CYTOPLASM_CONTROL_CELL, VoxelBlock.ModelControl);
+  }
   world.set(WATER_STATION_CELL, VoxelBlock.ModelControl);
   for (const sector of BOUNDARY_SECTORS) {
     if (snapshot.boundary.wallAnchors.includes(sector.id)) {
