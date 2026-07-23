@@ -32,7 +32,7 @@ Do not rely on this file to remember anything permanently.
 
 ## Running counter
 
-Next turn number to use: **18**
+Next turn number to use: **19**
 
 ## Entry template
 
@@ -47,6 +47,19 @@ Next turn number to use: **18**
 ```
 
 ## Log
+
+### Turn 18 — 2026-07-23 — Codex (Sol)
+
+**Reviewed:** exact automated/emulated RC candidate `0dc576c9e164b7b5b48136943df4426fe5a47bde`, GitHub CI run `30004127847`, and protected Preview deployment `5571750039`
+**Context:** Coordinator closeout after Keyur superseded the excessive three-local-matrix requirement and the bounded exact-CI/Preview gate passed.
+**Findings:**
+
+- The candidate is pushed and exact-SHA CI passed the full quality/build job plus one complete one-worker, zero-retry `test:e2e:rc` browser matrix. The earlier failed and later stopped local matrices are uncounted and invalid.
+- The protected Preview passed signed-in 1024 × 768 startup/lazy-load smoke with its embedded exact SHA, usable private identification, zero console errors, and no pre-mission canvas/Babylon load. This is not a full Preview mission or backend result.
+- Independent Architecture/Skeptical, Playtest/QA, and UX/Biology/Classroom reviewers returned GO for the bounded automated/emulated checkpoint with no new P0–P2 Biology issue.
+- V2 runtime delivery/receipt wiring, Sheet migration, Apps Script deployment, synthetic backend adversarial/load tests, full protected-Preview mission E2E, Production, physical iPad, school-network, accessibility-device, and classroom-pilot gates remain open.
+
+**Status:** promoted to handoff (sections 4–10)
 
 ### Turn 17 — 2026-07-22 — Codex (Sol)
 
