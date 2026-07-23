@@ -31,6 +31,11 @@ import {
 } from './state/integratedGameStore';
 import type { SaveEnvelopeV3, StudentProfile, VoxelMissionSnapshotV1 } from './types/game';
 
+const DEV_BUILD = import.meta.env.DEV;
+const loadIntegratedMissionTestTools = DEV_BUILD
+  ? () => import('./testing/integratedMissionTestTools')
+  : null;
+
 const VoxelMissionApp = lazy(() =>
   import('./proof/VoxelMissionApp').then((module) => ({ default: module.default })),
 );
@@ -62,6 +67,10 @@ const RESULTS_ACTION_FAILURE: Record<ResultsAction, string> = {
 };
 
 export default function App() {
+  const localTestMode = useMemo(
+    () => DEV_BUILD && new URLSearchParams(window.location.search).get('test') === '1',
+    [],
+  );
   const performanceDiagnostics = useMemo(
     () => new URLSearchParams(window.location.search).get('diagnostics') === 'performance',
     [],
@@ -111,6 +120,9 @@ export default function App() {
   const [pendingAttemptRecovery, setPendingAttemptRecovery] = useState(false);
   const [contextLost, setContextLost] = useState(false);
   const [portrait, setPortrait] = useState(window.innerHeight > window.innerWidth);
+  const [testSceneEpoch, setTestSceneEpoch] = useState(0);
+  const [testTransitioning, setTestTransitioning] = useState(false);
+  const testTransitioningRef = useRef(false);
 
   const scoreBreakdown = useMemo(
     () => scoreIntegratedSnapshot(voxelMission, gradedSnapshot, screen),
@@ -478,11 +490,47 @@ export default function App() {
 
   const handleSceneSnapshot = useCallback(
     (mission: VoxelMissionSnapshotV1) => {
+      if (testTransitioningRef.current) return;
       cacheSceneSnapshot(mission);
       scheduleSave();
     },
     [cacheSceneSnapshot, scheduleSave],
   );
+
+  const advanceTestStage = async () => {
+    if (!localTestMode || !loadIntegratedMissionTestTools || testTransitioningRef.current) return;
+    const state = useIntegratedGameStore.getState();
+    if (state.screen !== 'mission' || state.finalizing) return;
+    testTransitioningRef.current = true;
+    setTestTransitioning(true);
+    state.setPaused(true);
+    try {
+      const { advanceIntegratedMissionForTesting } = await loadIntegratedMissionTestTools();
+      const voxelMission = advanceIntegratedMissionForTesting(state.voxelMission);
+      useIntegratedGameStore.setState({ voxelMission });
+      const nextState = useIntegratedGameStore.getState();
+      await coordinatorRef.current?.requestSave(activeSaveFromIntegratedState(nextState));
+      setTestSceneEpoch((value) => value + 1);
+      window.setTimeout(() => {
+        testTransitioningRef.current = false;
+        setTestTransitioning(false);
+        useIntegratedGameStore.getState().setPaused(false);
+      }, 100);
+    } catch (error) {
+      testTransitioningRef.current = false;
+      setTestTransitioning(false);
+      useIntegratedGameStore.getState().setPaused(false);
+      const code = error instanceof Error ? error.message : 'TEST_STAGE_FAILED';
+      setFinalizationError(`Test stage could not advance: ${code}`);
+    }
+  };
+
+  const triggerTestTimeout = () => {
+    if (!localTestMode || testTransitioningRef.current) return;
+    useIntegratedGameStore.setState({
+      activeElapsedMs: ASSIGNMENT.durationSeconds * 1000,
+    });
+  };
 
   const classes = [
     'app-shell',
@@ -543,6 +591,7 @@ export default function App() {
         >
           <Suspense fallback={<div className="scene-loading">Preparing voxel cell yard…</div>}>
             <VoxelMissionApp
+              key={localTestMode ? `test-scene-${testSceneEpoch}` : 'classroom-scene'}
               mode="classroom"
               initialMission={voxelMission}
               controls={controls}
@@ -574,6 +623,21 @@ export default function App() {
               }}
             />
           </Suspense>
+          {DEV_BUILD && localTestMode ? (
+            <aside className="integrated-test-tools" aria-label="Local test tools">
+              <span>TEST MODE · submissions excluded</span>
+              <button
+                type="button"
+                disabled={testTransitioning}
+                onClick={() => void advanceTestStage()}
+              >
+                {testTransitioning ? 'Advancing test stage…' : 'Advance test stage'}
+              </button>
+              <button type="button" disabled={testTransitioning} onClick={triggerTestTimeout}>
+                Set active timer to limit
+              </button>
+            </aside>
+          ) : null}
         </GameErrorBoundary>
       ) : null}
 

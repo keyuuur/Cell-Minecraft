@@ -109,6 +109,7 @@ function gltfFor(id, parts) {
   ];
   return {
     asset: { version: '2.0', generator: 'Build a Living Cell original voxel prefab generator' },
+    extensionsUsed: ['KHR_materials_unlit'],
     scene: 0,
     scenes: [{ nodes: [0] }],
     nodes,
@@ -117,6 +118,7 @@ function gltfFor(id, parts) {
       const color = materials[name];
       return {
         name,
+        extensions: { KHR_materials_unlit: {} },
         pbrMetallicRoughness: {
           baseColorFactor: color,
           metallicFactor: 0,

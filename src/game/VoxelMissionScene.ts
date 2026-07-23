@@ -67,8 +67,18 @@ const EYE_HEIGHT = 1.7;
 const PLAYER_SPEED = 3.5;
 const TARGET_INTERVAL = 0.08;
 const SNAPSHOT_INTERVAL = 0.12;
-const CENTRAL_VACUOLE_ENTRY_WAYPOINT = { x: 3, y: 1, z: 1 } as const;
+const WAYPOINT_REACHED_DISTANCE = 0.85;
+const INTERIOR_ENTRY_WAYPOINT = { x: 3, y: 1, z: 1 } as const;
+const INTERIOR_PLACEMENT_WAYPOINTS: Readonly<
+  Record<Exclude<PlaceableStructureId, 'centralVacuole'>, VoxelPoint>
+> = {
+  nucleus: { x: -3, y: 1, z: 1.2 },
+  ribosomes: { x: -3, y: 1, z: 1.2 },
+  mitochondria: { x: 0, y: 1, z: 1.2 },
+  chloroplasts: { x: 3, y: 1, z: 1.2 },
+};
 const CENTRAL_VACUOLE_SIDE_WAYPOINT = { x: 3, y: 1, z: -2 } as const;
+type PlacementNavigationStage = 'entry' | 'placement-view' | 'central-side';
 const PLANT_INDICATOR_POSITION = { x: -6, y: 0, z: 4 } as const;
 const MISSION_MODULE_IDS_FOR_HOTBAR: Partial<Record<string, MissionModuleId>> = {
   Digit2: 'cellWall',
@@ -293,6 +303,7 @@ export class VoxelMissionScene {
   private readonly reducedMotion: boolean;
   private readonly presentation: MissionRuntimePresentation;
   private readonly prefabAssets: MissionPrefabAssetRegistry;
+  private disposePromise: Promise<void> | null = null;
   private readonly performanceRecorder: MissionPerformanceRecorder | null;
   private sceneInstrumentation: SceneInstrumentation | null = null;
   private performanceInstrumentationRequested = false;
@@ -320,6 +331,14 @@ export class VoxelMissionScene {
   private overviewReturn: { position: Vector3; rotation: Vector3; fov: number } | null = null;
   private lastRecenterPoint: VoxelPoint | null = null;
   private lastRecenterStage: VoxelMissionDiagnostics['recenterStage'] = 'normal';
+  private placementNavigationCue: string | null = null;
+  private placementNavigation: {
+    stage: PlacementNavigationStage;
+    structureId: PlaceableStructureId;
+    target: VoxelPoint;
+  } | null = null;
+  private interiorEntryReadyFor: PlaceableStructureId | null = null;
+  private interiorRouteReadyFor: PlaceableStructureId | null = null;
   private lastTime = performance.now();
   private targetTick = 0;
   private snapshotTick = 0;
@@ -1405,6 +1424,7 @@ export class VoxelMissionScene {
 
   private updateTarget(): void {
     const snapshot = this.runtime.peek();
+    this.updatePlacementNavigation(snapshot);
     this.currentTarget = this.resolveTarget();
     this.currentViewModel = selectMissionViewModel(
       snapshot as VoxelMissionSnapshotV1,
@@ -1439,14 +1459,58 @@ export class VoxelMissionScene {
         primaryActionEnabled: this.placementValid,
       };
     }
+    if (this.placementNavigationCue) {
+      this.placementValid = false;
+      this.currentViewModel = { ...this.currentViewModel, primaryActionEnabled: false };
+    }
     this.targetLabel = this.targetText(snapshot, this.currentTarget);
     this.updateTargetMarker(snapshot);
+  }
+
+  private updatePlacementNavigation(snapshot: Readonly<VoxelMissionSnapshotV1>): void {
+    const navigation = this.placementNavigation;
+    const selected = snapshot.selectedHotbarItem;
+    if (
+      !navigation ||
+      selected === 'builder-pick' ||
+      !isPlaceableStructureId(selected) ||
+      selected !== navigation.structureId ||
+      snapshot.moduleInventory[selected] <= 0
+    ) {
+      if (navigation) {
+        this.placementNavigation = null;
+        this.placementNavigationCue = null;
+      }
+      return;
+    }
+    if (
+      Math.hypot(snapshot.player.x - navigation.target.x, snapshot.player.z - navigation.target.z) >
+      WAYPOINT_REACHED_DISTANCE
+    ) {
+      return;
+    }
+    if (navigation.stage === 'entry') this.interiorEntryReadyFor = selected;
+    if (navigation.stage === 'placement-view') this.interiorRouteReadyFor = selected;
+    this.placementNavigation = null;
+    this.placementNavigationCue = 'VIEWPOINT REACHED · PRESS RECENTER';
+  }
+
+  private beginPlacementNavigation(
+    structureId: PlaceableStructureId,
+    stage: PlacementNavigationStage,
+    target: VoxelPoint,
+    cue: string,
+  ): VoxelPoint {
+    this.placementNavigation = { stage, structureId, target: { ...target } };
+    this.placementNavigationCue = cue;
+    return { ...target };
   }
 
   private targetText(
     snapshot: Readonly<VoxelMissionSnapshotV1>,
     target: MissionTarget | null,
   ): string {
+    if (this.placementNavigationCue) return this.placementNavigationCue;
     if (!target) return '';
     if (target.kind === 'pickup') return `${STRUCTURE_LABELS[target.item]} DROP · COLLECT`;
     if (target.kind === 'supply') {
@@ -1580,6 +1644,8 @@ export class VoxelMissionScene {
   }
 
   private recenterPoint(snapshot: Readonly<VoxelMissionSnapshotV1>): VoxelPoint | null {
+    this.placementNavigationCue = null;
+    this.placementNavigation = null;
     const recovery = snapshot.correction.recovery;
     if (recovery?.kind === 'pickup') {
       const spawnSequence = recovery.spawnSequence;
@@ -1593,32 +1659,59 @@ export class VoxelMissionScene {
     const selected = snapshot.selectedHotbarItem;
     if (selected !== 'builder-pick' && snapshot.moduleInventory[selected] > 0) {
       if (selected === 'cellWall' || selected === 'cellMembrane') {
+        this.interiorEntryReadyFor = null;
+        this.interiorRouteReadyFor = null;
         const sector = nextBoundarySector(snapshot.boundary, selected);
         return sector ? (selected === 'cellWall' ? sector.wallBacking : sector.wallAnchor) : null;
       }
       const anchor = MISSION_RECOMMENDED_PREFAB_ANCHORS[selected];
-      if (selected === 'centralVacuole') {
-        const player = snapshot.player;
+      const player = snapshot.player;
+      if (this.interiorEntryReadyFor !== selected) {
         if (
-          player.z > 0.6 &&
-          Math.hypot(
-            player.x - CENTRAL_VACUOLE_ENTRY_WAYPOINT.x,
-            player.z - CENTRAL_VACUOLE_ENTRY_WAYPOINT.z,
-          ) > 0.55
+          Math.hypot(player.x - INTERIOR_ENTRY_WAYPOINT.x, player.z - INTERIOR_ENTRY_WAYPOINT.z) >
+          WAYPOINT_REACHED_DISTANCE
         ) {
-          return { ...CENTRAL_VACUOLE_ENTRY_WAYPOINT };
+          this.interiorRouteReadyFor = null;
+          return this.beginPlacementNavigation(
+            selected,
+            'entry',
+            INTERIOR_ENTRY_WAYPOINT,
+            'CELL ENTRY GUIDE · WALK FORWARD',
+          );
         }
+        this.interiorEntryReadyFor = selected;
+      }
+      if (selected === 'centralVacuole') {
+        this.interiorRouteReadyFor = null;
         if (
           Math.hypot(
             player.x - CENTRAL_VACUOLE_SIDE_WAYPOINT.x,
             player.z - CENTRAL_VACUOLE_SIDE_WAYPOINT.z,
-          ) > 0.55
+          ) > WAYPOINT_REACHED_DISTANCE
         ) {
-          return { ...CENTRAL_VACUOLE_SIDE_WAYPOINT };
+          return this.beginPlacementNavigation(
+            selected,
+            'central-side',
+            CENTRAL_VACUOLE_SIDE_WAYPOINT,
+            'CENTRAL VACUOLE SIDE VIEW · WALK FORWARD',
+          );
         }
+      } else if (this.interiorRouteReadyFor !== selected) {
+        const waypoint = INTERIOR_PLACEMENT_WAYPOINTS[selected];
+        if (Math.hypot(player.x - waypoint.x, player.z - waypoint.z) > WAYPOINT_REACHED_DISTANCE) {
+          return this.beginPlacementNavigation(
+            selected,
+            'placement-view',
+            waypoint,
+            'OPEN BUILD VIEW · WALK FORWARD',
+          );
+        }
+        this.interiorRouteReadyFor = selected;
       }
       return { x: anchor.x, y: 0.5, z: anchor.z };
     }
+    this.interiorEntryReadyFor = null;
+    this.interiorRouteReadyFor = null;
     if (snapshot.boundary.wallAnchors.length < 6) return MISSION_SUPPLY_CELLS.cellWall;
     if (!snapshot.boundary.functionEvidence.cellWall) return BOUNDARY_SECTORS[0].wallAnchor;
     if (snapshot.boundary.membraneAnchors.length < 6) return MISSION_SUPPLY_CELLS.cellMembrane;
@@ -1640,7 +1733,18 @@ export class VoxelMissionScene {
       };
     }
     const supply = activeMissionSupplies(snapshot)[0];
-    if (supply) return MISSION_SUPPLY_CELLS[supply];
+    if (supply) {
+      const player = snapshot.player;
+      const insideChamber = player.z < 0.6 && player.z > -7.2 && Math.abs(player.x) < 5.5;
+      if (
+        insideChamber &&
+        Math.hypot(player.x - INTERIOR_ENTRY_WAYPOINT.x, player.z - INTERIOR_ENTRY_WAYPOINT.z) >
+          WAYPOINT_REACHED_DISTANCE
+      ) {
+        return { ...INTERIOR_ENTRY_WAYPOINT };
+      }
+      return MISSION_SUPPLY_CELLS[supply];
+    }
     if (
       allInternalEvidenceForScene(snapshot) &&
       (!snapshot.homeostasis.droughtStarted ||
@@ -1714,8 +1818,7 @@ export class VoxelMissionScene {
       target
     ) {
       this.lastRecenterStage =
-        target.x === CENTRAL_VACUOLE_ENTRY_WAYPOINT.x &&
-        target.z === CENTRAL_VACUOLE_ENTRY_WAYPOINT.z
+        target.x === INTERIOR_ENTRY_WAYPOINT.x && target.z === INTERIOR_ENTRY_WAYPOINT.z
           ? 'central-entry'
           : target.x === CENTRAL_VACUOLE_SIDE_WAYPOINT.x &&
               target.z === CENTRAL_VACUOLE_SIDE_WAYPOINT.z
@@ -1893,8 +1996,8 @@ export class VoxelMissionScene {
     if (!this.renderLoopRunning) this.renderStaticFrame();
   }
 
-  dispose(): void {
-    if (this.disposed) return;
+  dispose(): Promise<void> {
+    if (this.disposePromise) return this.disposePromise;
     this.disposed = true;
     this.clearOverviewSurface();
     this.clearInput();
@@ -1911,9 +2014,21 @@ export class VoxelMissionScene {
     this.sceneInstrumentation = null;
     this.performanceRecorder?.dispose();
     this.performanceSnapshot = null;
-    this.prefabAssets.dispose();
-    this.worldRenderer.dispose();
-    this.scene.dispose();
-    this.engine.dispose();
+    this.disposePromise = (async () => {
+      try {
+        await this.prefabAssets.dispose();
+      } finally {
+        try {
+          this.worldRenderer.dispose();
+        } finally {
+          try {
+            this.scene.dispose();
+          } finally {
+            this.engine.dispose();
+          }
+        }
+      }
+    })();
+    return this.disposePromise;
   }
 }

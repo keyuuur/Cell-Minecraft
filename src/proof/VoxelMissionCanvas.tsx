@@ -107,7 +107,9 @@ export function VoxelMissionCanvas({
         delete diagnosticsWindow[MISSION_PERFORMANCE_BRIDGE_KEY];
       }
       callbacksRef.current.onReady(null);
-      controller.dispose();
+      void Promise.resolve(controller.dispose()).catch(() => {
+        // The scene owns best-effort final cleanup; React must not leak a rejected teardown promise.
+      });
     };
   }, []);
 

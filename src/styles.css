@@ -557,6 +557,28 @@ select option {
   font-size: 1.2rem;
   font-weight: 800;
 }
+
+.integrated-test-tools {
+  position: fixed;
+  z-index: 40;
+  top: 0.5rem;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  border: 2px solid #fff3a8;
+  border-radius: 0.55rem;
+  background: rgb(19 37 31 / 94%);
+  color: #fff8cc;
+  font-size: 0.72rem;
+  font-weight: 800;
+  transform: translateX(-50%);
+}
+
+.integrated-test-tools button {
+  min-height: 44px;
+}
 .game-canvas-wrap,
 .game-canvas {
   width: 100%;
@@ -1538,6 +1560,34 @@ select option {
 }
 
 @media (max-height: 700px) and (orientation: landscape) {
+  .tutorial-card {
+    padding: 6px 10px;
+  }
+  .tutorial-card h1 {
+    font-size: 1.55rem;
+  }
+  .control-choice-grid .choice-card {
+    min-height: 64px;
+  }
+  .control-practice {
+    padding: 6px;
+  }
+  .control-practice p {
+    font-size: 0.82rem;
+  }
+  .practice-arena {
+    min-height: 180px;
+  }
+  .practice-map {
+    inset: 0 0 70px;
+  }
+  .practice-joystick {
+    width: 62px;
+    height: 62px;
+  }
+  .tutorial-model-boundary {
+    font-size: 0.66rem;
+  }
   .hud-top {
     top: 6px;
   }

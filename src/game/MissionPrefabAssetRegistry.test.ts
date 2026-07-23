@@ -97,7 +97,7 @@ describe('mission prefab asset registry', () => {
     expect(fallback.setEnabled).not.toHaveBeenCalled();
   });
 
-  it('disposes a delayed container after scene teardown without instantiating it', async () => {
+  it('drains and disposes a delayed container before scene teardown can finish', async () => {
     let resolveLoad!: (container: ReturnType<typeof containerHarness>['container']) => void;
     const loaded = containerHarness();
     const loader = vi.fn(
@@ -113,14 +113,59 @@ describe('mission prefab asset registry', () => {
       fallbackHarness(),
       () => true,
     );
-    registry.dispose();
+    const disposal = registry.dispose();
+    let disposalFinished = false;
+    void disposal.then(() => {
+      disposalFinished = true;
+    });
+    await Promise.resolve();
+    expect(disposalFinished).toBe(false);
     resolveLoad(loaded.container);
 
     expect(await replacement).toBe(false);
-    await Promise.resolve();
+    await disposal;
+    expect(disposalFinished).toBe(true);
     expect(loaded.dispose).toHaveBeenCalledOnce();
     expect(loaded.instantiateModelsToScene).not.toHaveBeenCalled();
     expect(registry.stats()).toMatchObject({ activeInstances: 0 });
+    await expect(registry.dispose()).resolves.toBeUndefined();
+    expect(loaded.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('bounds an unresolved loader so scene teardown can finish', async () => {
+    vi.useFakeTimers();
+    try {
+      const loader = vi.fn(
+        () => new Promise<ReturnType<typeof containerHarness>['container']>(() => undefined),
+      );
+      const registry = new MissionPrefabAssetRegistry(scene, true, loader);
+      const replacement = registry.replaceFallback(
+        'nucleus',
+        parent,
+        fallbackHarness(),
+        () => true,
+      );
+      const disposal = registry.dispose();
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      await expect(replacement).resolves.toBe(false);
+      await expect(disposal).resolves.toBeUndefined();
+      expect(registry.stats()).toMatchObject({ failures: 1, pendingLoads: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('continues registry teardown when a Babylon container rejects disposal', async () => {
+    const loaded = containerHarness();
+    loaded.dispose.mockImplementation(() => {
+      throw new Error('DISPOSE_FAILED');
+    });
+    const registry = new MissionPrefabAssetRegistry(scene, true, async () => loaded.container);
+    await registry.replaceFallback('ribosomes', parent, fallbackHarness(), () => true);
+
+    await expect(registry.dispose()).resolves.toBeUndefined();
+    expect(loaded.dispose).toHaveBeenCalledOnce();
   });
 
   it('makes Low mode issue zero model requests', async () => {

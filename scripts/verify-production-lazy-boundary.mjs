@@ -21,6 +21,23 @@ for (const asset of initialAssets) {
 }
 
 const builtAssets = await readdir(path.join(distRoot, 'assets'));
+const developmentToolSentinels = [
+  'Advance test stage',
+  'Set active timer to limit',
+  'advanceIntegratedMissionForTesting',
+];
+for (const name of builtAssets) {
+  if (/integratedMissionTestTools/i.test(name)) {
+    throw new Error(`DEVELOPMENT_TOOL_CHUNK_IN_PRODUCTION:${name}`);
+  }
+  if (!name.endsWith('.js')) continue;
+  const source = await readFile(path.join(distRoot, 'assets', name), 'utf8');
+  for (const sentinel of developmentToolSentinels) {
+    if (source.includes(sentinel)) {
+      throw new Error(`DEVELOPMENT_TOOL_CODE_IN_PRODUCTION:${name}:${sentinel}`);
+    }
+  }
+}
 const missionChunks = builtAssets.filter((name) => /^VoxelMissionApp-.*\.js$/.test(name));
 if (missionChunks.length !== 1) {
   throw new Error(`EXPECTED_ONE_LAZY_MISSION_CHUNK:${missionChunks.length}`);

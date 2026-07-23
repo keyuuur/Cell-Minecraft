@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const evidenceRoot = process.env.VOXEL_MISSION_EVIDENCE_DIR;
@@ -29,7 +29,11 @@ const TESTED_APP_PATHS = [
   'package.json',
   'package-lock.json',
 ] as const;
-const EVIDENCE_HARNESS_PATHS = ['e2e/voxel-mission.spec.ts', 'playwright.config.ts'] as const;
+const EVIDENCE_HARNESS_PATHS = [
+  'e2e/voxel-mission.spec.ts',
+  'playwright.config.ts',
+  'playwright.mechanics.config.ts',
+] as const;
 const EVIDENCE_SCOPE_PATHS = [...TESTED_APP_PATHS, ...EVIDENCE_HARNESS_PATHS] as const;
 
 function requireGitSuccess(args: string[], description: string): void {
@@ -95,6 +99,29 @@ interface EvidenceImage {
   sha256: string;
 }
 
+const evidenceInProgressPath = evidenceRoot ? path.join(evidenceRoot, '.in-progress') : null;
+
+async function initializeEvidenceDirectory(): Promise<void> {
+  if (!evidenceRoot || !evidenceInProgressPath) return;
+  await mkdir(path.dirname(evidenceRoot), { recursive: true });
+  try {
+    await mkdir(evidenceRoot);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error(
+        'Evidence freshness failed: VOXEL_MISSION_EVIDENCE_DIR must name a new per-profile directory.',
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+  await writeFile(
+    evidenceInProgressPath,
+    `${JSON.stringify({ schemaVersion: 1, status: 'in-progress' })}\n`,
+    'utf8',
+  );
+}
+
 function horizontalDistance(left: string | null, right: string | null): number {
   const [leftX, , leftZ] = (left ?? '').split(',').map(Number);
   const [rightX, , rightZ] = (right ?? '').split(',').map(Number);
@@ -111,7 +138,6 @@ async function capture(page: Page, images: EvidenceImage[], file: string): Promi
       }),
   );
   await page.waitForTimeout(120);
-  await mkdir(evidenceRoot, { recursive: true });
   const filePath = path.join(evidenceRoot, file);
   const buffer = await page.screenshot({ path: filePath });
   images.push({ file, sha256: createHash('sha256').update(buffer).digest('hex') });
@@ -430,6 +456,7 @@ test('unified voxel mission completes boundary through structures using visible 
   const consoleErrors: string[] = [];
   const apiRequests: string[] = [];
   const images: EvidenceImage[] = [];
+  let offTargetMutation = false;
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
@@ -437,6 +464,8 @@ test('unified voxel mission completes boundary through structures using visible 
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.startsWith('/api/')) apiRequests.push(request.url());
   });
+
+  await initializeEvidenceDirectory();
 
   await page.setViewportSize({ width: 1024, height: browserName === 'webkit' ? 680 : 768 });
   await page.goto('/?proof=mission');
@@ -491,6 +520,11 @@ test('unified voxel mission completes boundary through structures using visible 
       await expect(mission).toHaveAttribute('data-mission-target-label', /BLOCKED LOCATION/);
       await page.keyboard.press('e');
       await page.waitForTimeout(180);
+      offTargetMutation =
+        (await mission.getAttribute('data-mission-wall-count')) !== count ||
+        (await mission.getAttribute('data-mission-cellwall-inventory')) !== inventory ||
+        (await mission.getAttribute('data-mission-score')) !== score;
+      expect(offTargetMutation).toBe(false);
       await expect(mission).toHaveAttribute('data-mission-wall-count', count!);
       await expect(mission).toHaveAttribute('data-mission-cellwall-inventory', inventory!);
       await expect(mission).toHaveAttribute('data-mission-score', score!);
@@ -724,8 +758,10 @@ test('unified voxel mission completes boundary through structures using visible 
     expect(images.map(({ file }) => file)).toEqual(EXPECTED_EVIDENCE_FILES);
     expect(new Set(images.map(({ file }) => file)).size).toBe(EXPECTED_EVIDENCE_FILES.length);
     expect(images.every(({ sha256 }) => /^[0-9a-f]{64}$/.test(sha256))).toBe(true);
+    const temporaryManifest = path.join(evidenceRoot, 'run.json.tmp');
+    const finalManifest = path.join(evidenceRoot, 'run.json');
     await writeFile(
-      path.join(evidenceRoot, 'run.json'),
+      temporaryManifest,
       `${JSON.stringify(
         {
           schemaVersion: 1,
@@ -738,7 +774,7 @@ test('unified voxel mission completes boundary through structures using visible 
           screenshots: images,
           semanticGates: {
             visibleControlsOnly: true,
-            offTargetMutation: false,
+            offTargetMutation,
             pauseClearedInput: true,
             invalidPlacementConservedState: true,
             correctionRestoredScore: true,
@@ -755,6 +791,8 @@ test('unified voxel mission completes boundary through structures using visible 
       )}\n`,
       'utf8',
     );
+    await rename(temporaryManifest, finalManifest);
+    await unlink(evidenceInProgressPath!);
   }
 });
 
