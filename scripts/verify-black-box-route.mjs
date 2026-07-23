@@ -8,6 +8,7 @@ const forbidden = [
   ['Zustand access', /zustand|useIntegratedGameStore/i],
   ['development stage tools', /Advance test stage|Set active timer to limit/i],
   ['gameplay state evaluation', /page\.evaluate/i],
+  ['cross-context binding', /exposeBinding|exposeFunction/i],
   ['scene/controller bridge access', /bridge|sceneController|controllerRef/i],
 ];
 

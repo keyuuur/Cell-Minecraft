@@ -6,6 +6,8 @@ import {
   placeAndInspectVisibleStructure,
 } from './helpers/visibleStudentControls';
 
+const RELEASE_CONTEXT_LOSS_SENTINEL = '__RELEASE_WEBGL_CONTEXT_LOST__';
+
 test.describe.configure({ mode: 'serial', retries: 0, timeout: 900_000 });
 
 test('@release-blackbox completes the visible student mission at 100 percent', async ({
@@ -30,23 +32,25 @@ test('@release-blackbox completes the visible student mission at 100 percent', a
   let graphicsContextLosses = 0;
   let missionStarted = false;
 
-  await page.exposeBinding('reportReleaseContextLoss', () => {
-    graphicsContextLosses += 1;
-  });
-  await page.addInitScript(() => {
+  await page.addInitScript((sentinel) => {
     window.addEventListener(
       'webglcontextlost',
       () => {
-        const report = (window as typeof window & { reportReleaseContextLoss?: () => void })
-          .reportReleaseContextLoss;
-        report?.();
+        // A one-way console signal avoids a Playwright binding round trip while
+        // Chromium is destroying the context. The latter can deadlock context.close().
+        console.error(sentinel);
       },
       true,
     );
-  });
+  }, RELEASE_CONTEXT_LOSS_SENTINEL);
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    if (message.text() === RELEASE_CONTEXT_LOSS_SENTINEL) {
+      graphicsContextLosses += 1;
+      return;
+    }
+    consoleErrors.push(message.text());
   });
   page.on('request', (request) => {
     if (missionStarted) return;
@@ -175,6 +179,20 @@ test('@release-blackbox completes the visible student mission at 100 percent', a
   await page.getByRole('button', { name: 'CLOSE VIEW' }).click();
   markStage('drought-and-recovery');
 
+  const visibleTimer = (
+    await page
+      .locator('.voxel-classroom-timer')
+      .getByText(/^\d+:\d{2} LEFT$/)
+      .textContent()
+  )?.trim();
+  expect(visibleTimer).toMatch(/^\d+:\d{2} LEFT$/);
+  const [remainingMinutes, remainingSeconds] = (visibleTimer ?? '0:00 LEFT')
+    .replace(' LEFT', '')
+    .split(':')
+    .map(Number);
+  const remainingActiveSeconds = remainingMinutes * 60 + remainingSeconds;
+  expect(remainingActiveSeconds).toBeGreaterThan(0);
+  expect(remainingActiveSeconds).toBeLessThan(15 * 60);
   await page.getByRole('button', { name: 'Submit the final graded result' }).click();
   await expect(page.getByRole('heading', { name: 'Stable cell achieved' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '100%' })).toBeVisible();
@@ -206,4 +224,5 @@ test('@release-blackbox completes the visible student mission at 100 percent', a
   expect(graphicsContextLosses).toBe(0);
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
+  await page.close({ runBeforeUnload: false });
 });
