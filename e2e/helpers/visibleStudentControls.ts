@@ -104,7 +104,7 @@ export async function pulseMissionJoystick(
   await page.waitForTimeout(90);
 }
 
-async function nudgeMissionCrosshair(page: Page, pulse: number): Promise<void> {
+export async function nudgeMissionCrosshair(page: Page, pulse: number): Promise<void> {
   const canvas = page.getByLabel('First-person integrated voxel plant-cell construction mission');
   const box = await canvas.boundingBox();
   if (!box) throw new Error('The first-person mission view was not visible.');
@@ -146,14 +146,63 @@ async function visibleTargetText(page: Page): Promise<string> {
   return (await label.textContent({ timeout: 250 }).catch(() => '')) ?? '';
 }
 
+type MissionMovementPulse = (
+  page: Page,
+  direction: Direction,
+  milliseconds: number,
+) => Promise<void>;
+
+export async function navigateByVisibleMissionGuidance(
+  page: Page,
+  reached: () => Promise<boolean>,
+  detour: 'left' | 'right' = 'right',
+  movementPulse: MissionMovementPulse = pulseMissionJoystick,
+  maximumPulses = 52,
+): Promise<void> {
+  const recenter = page.getByRole('button', { name: 'RECENTER' });
+  const recentTargets: string[] = [];
+
+  for (let pulse = 0; pulse < maximumPulses; pulse += 1) {
+    if (await reached()) return;
+    await recenter.click();
+    if (await reached()) return;
+
+    const target = await visibleTargetText(page);
+    recentTargets.push(target || '(no visible target)');
+    if (recentTargets.length > 12) recentTargets.shift();
+
+    if (!target) {
+      await movementPulse(page, 'forward', 180);
+    } else if (/WALK FORWARD/i.test(target)) {
+      await movementPulse(page, 'forward', 180);
+    } else if (/STEP BACK/i.test(target)) {
+      await movementPulse(page, 'backward', 420);
+    } else if (/BLOCKED LOCATION/i.test(target)) {
+      if (pulse % 3 === 2) {
+        await movementPulse(page, detour, 420);
+      } else {
+        await nudgeMissionCrosshair(page, pulse);
+      }
+    } else if (pulse > 0 && pulse % 7 === 0) {
+      await movementPulse(page, detour, 500);
+    } else if (pulse > 0 && pulse % 13 === 0) {
+      await movementPulse(page, 'backward', 380);
+    } else {
+      await movementPulse(page, 'forward', pulse > 36 ? 130 : 220);
+    }
+  }
+
+  throw new Error(
+    `Visible guidance did not reach its action. Recent targets: ${recentTargets.join(' | ')}`,
+  );
+}
+
 export async function navigateToVisibleAction(
   page: Page,
   accessibleName: string | RegExp,
   targetLabel: RegExp,
   detour: 'left' | 'right' = 'right',
 ): Promise<Locator> {
-  const recenter = page.getByRole('button', { name: 'RECENTER' });
-  const recentTargets: string[] = [];
   const matchingAction = () => page.getByRole('button', { name: accessibleName });
   const reached = async () => {
     const action = matchingAction();
@@ -161,39 +210,14 @@ export async function navigateToVisibleAction(
     return (await action.count()) === 1 && (await action.isEnabled()) && targetLabel.test(target);
   };
 
-  for (let pulse = 0; pulse < 52; pulse += 1) {
-    if (await reached()) return matchingAction();
-    await recenter.click();
-    if (await reached()) return matchingAction();
-
-    const target = await visibleTargetText(page);
-    recentTargets.push(target || '(no visible target)');
-    if (recentTargets.length > 12) recentTargets.shift();
-
-    if (!target) {
-      await pulseMissionJoystick(page, 'forward', 180);
-    } else if (/WALK FORWARD/i.test(target)) {
-      await pulseMissionJoystick(page, 'forward', 180);
-    } else if (/STEP BACK/i.test(target)) {
-      await pulseMissionJoystick(page, 'backward', 420);
-    } else if (/BLOCKED LOCATION/i.test(target)) {
-      if (pulse % 3 === 2) {
-        await pulseMissionJoystick(page, detour, 420);
-      } else {
-        await nudgeMissionCrosshair(page, pulse);
-      }
-    } else if (pulse > 0 && pulse % 7 === 0) {
-      await pulseMissionJoystick(page, detour, 500);
-    } else if (pulse > 0 && pulse % 13 === 0) {
-      await pulseMissionJoystick(page, 'backward', 380);
-    } else {
-      await pulseMissionJoystick(page, 'forward', pulse > 36 ? 130 : 220);
-    }
+  try {
+    await navigateByVisibleMissionGuidance(page, reached, detour);
+  } catch (error) {
+    throw new Error(`Visible guidance did not reach ${String(accessibleName)} at ${targetLabel}.`, {
+      cause: error,
+    });
   }
-
-  throw new Error(
-    `Visible guidance did not reach ${String(accessibleName)} at ${targetLabel}. Recent targets: ${recentTargets.join(' | ')}`,
-  );
+  return matchingAction();
 }
 
 export async function holdVisibleActionUntil(

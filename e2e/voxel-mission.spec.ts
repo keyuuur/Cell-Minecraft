@@ -3,6 +3,10 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  navigateByVisibleMissionGuidance,
+  nudgeMissionCrosshair,
+} from './helpers/visibleStudentControls';
 
 const evidenceRoot = process.env.VOXEL_MISSION_EVIDENCE_DIR;
 const testedAppSha = process.env.VOXEL_MISSION_TESTED_APP_SHA;
@@ -31,10 +35,16 @@ const TESTED_APP_PATHS = [
 ] as const;
 const EVIDENCE_HARNESS_PATHS = [
   'e2e/voxel-mission.spec.ts',
+  'e2e/helpers/visibleStudentControls.ts',
   'playwright.config.ts',
+  'playwright.dev.config.ts',
   'playwright.mechanics.config.ts',
 ] as const;
 const EVIDENCE_SCOPE_PATHS = [...TESTED_APP_PATHS, ...EVIDENCE_HARNESS_PATHS] as const;
+const COORDINATE_ROUTE_TITLE =
+  '@mechanics-coordinate unified voxel mission completes boundary through structures using visible controls';
+const CLASSROOM_ROUTE_TITLE =
+  '@mechanics-classroom integrated classroom route reaches one queued immutable 100 percent result through visible controls';
 
 function requireGitSuccess(args: string[], description: string): void {
   const result = spawnSync('git', args, {
@@ -217,108 +227,64 @@ async function holdJoystick(
   await page.waitForTimeout(90);
 }
 
+async function pulseKeyboardMovement(
+  page: Page,
+  direction: 'forward' | 'backward' | 'left' | 'right',
+  milliseconds: number,
+): Promise<void> {
+  const key = {
+    forward: 'w',
+    backward: 's',
+    left: 'a',
+    right: 'd',
+  }[direction];
+  await page.keyboard.down(key);
+  await page.waitForTimeout(milliseconds);
+  await page.keyboard.up(key);
+  await page.waitForTimeout(90);
+}
+
+async function moveMission(
+  page: Page,
+  direction: 'forward' | 'backward' | 'left' | 'right',
+  milliseconds: number,
+): Promise<void> {
+  if (test.info().title === COORDINATE_ROUTE_TITLE) {
+    await pulseKeyboardMovement(page, direction, milliseconds);
+    return;
+  }
+  await holdJoystick(page, direction, milliseconds);
+}
+
 async function approachUntil(
   page: Page,
   mission: Locator,
   recenter: Locator,
   condition: () => Promise<boolean>,
-  maximumPulses = 40,
+  maximumPulses = 52,
   detour: 'left' | 'right' = 'right',
 ): Promise<void> {
-  const navigationTrail: string[] = [];
-  const recordNavigation = async (label: string): Promise<void> => {
-    navigationTrail.push(
-      `${label}:${await mission.getAttribute('data-mission-player-position')}:${await mission.getAttribute(
+  await expect(recenter).toBeVisible();
+  try {
+    await navigateByVisibleMissionGuidance(page, condition, detour, moveMission, maximumPulses);
+  } catch (error) {
+    throw new Error(
+      `Visible movement did not reach the recentered mission target. phase=${await mission.getAttribute(
+        'data-mission-phase',
+      )} player=${await mission.getAttribute('data-mission-player')} exact=${await mission.getAttribute(
+        'data-mission-player-position',
+      )} target=${await mission.getAttribute(
+        'data-mission-target',
+      )} label=${await mission.getAttribute('data-mission-target-label')} cell=${await mission.getAttribute(
         'data-mission-target-cell',
-      )}:${await mission.getAttribute('data-mission-target-face')}:${await mission.getAttribute(
+      )} face=${await mission.getAttribute('data-mission-target-face')} selected=${await mission.getAttribute(
+        'data-mission-selected',
+      )} action=${await mission.getAttribute('data-mission-action')} enabled=${await mission.getAttribute(
         'data-mission-action-enabled',
-      )}`,
+      )} recenter=${await mission.getAttribute('data-mission-recenter')}`,
+      { cause: error },
     );
-    if (navigationTrail.length > 12) navigationTrail.shift();
-  };
-  const distanceToRecenter = async (): Promise<number | null> => {
-    const player = ((await mission.getAttribute('data-mission-player-position')) ?? '')
-      .split(',')
-      .map(Number);
-    const target = ((await mission.getAttribute('data-mission-recenter')) ?? '')
-      .split(',')
-      .map(Number);
-    return player.length === 3 &&
-      target.length === 3 &&
-      [...player, ...target].every(Number.isFinite)
-      ? Math.hypot(player[0] - target[0], player[2] - target[2])
-      : null;
-  };
-  for (let pulse = 0; pulse < maximumPulses; pulse += 1) {
-    if (await condition()) return;
-    await recenter.click();
-    if (await condition()) return;
-    {
-      const action = await mission.getAttribute('data-mission-action');
-      const actionEnabled = await mission.getAttribute('data-mission-action-enabled');
-      const followingCentralVacuoleWaypoint =
-        (await mission.getAttribute('data-mission-selected')) === 'centralVacuole' &&
-        (await mission.getAttribute('data-mission-recenter-stage')) !== 'central-anchor';
-      const blockedByPrefab =
-        !followingCentralVacuoleWaypoint &&
-        actionEnabled === 'false' &&
-        ((await mission.getAttribute('data-mission-target')) === 'structure' || action === 'place');
-      let detourDirection = detour;
-      if (blockedByPrefab) {
-        const [playerX] = ((await mission.getAttribute('data-mission-player-position')) ?? '')
-          .split(',')
-          .map(Number);
-        const [targetX] = ((await mission.getAttribute('data-mission-recenter')) ?? '')
-          .split(',')
-          .map(Number);
-        if (
-          Number.isFinite(playerX) &&
-          Number.isFinite(targetX) &&
-          Math.abs(targetX - playerX) > 0.25
-        ) {
-          detourDirection = targetX > playerX ? 'right' : 'left';
-        }
-      }
-      if (blockedByPrefab) {
-        await holdJoystick(page, detourDirection, 520);
-        await recordNavigation(detourDirection);
-      } else {
-        const before = await distanceToRecenter();
-        await holdJoystick(page, 'forward', 220);
-        const after = await distanceToRecenter();
-        if (before !== null && after !== null && after > before + 0.08) {
-          await holdJoystick(page, 'backward', 440);
-        }
-        await recordNavigation('forward');
-      }
-    }
-    if (await condition()) return;
   }
-  await recenter.click();
-  await holdJoystick(page, 'backward', 480);
-  for (let pulse = 0; pulse < 16; pulse += 1) {
-    if (await condition()) return;
-    await recenter.click();
-    if (await condition()) return;
-    await holdJoystick(page, 'forward', 130);
-    if (await condition()) return;
-  }
-  if (await condition()) return;
-  throw new Error(
-    `Visible movement did not reach the recentered mission target. phase=${await mission.getAttribute(
-      'data-mission-phase',
-    )} player=${await mission.getAttribute('data-mission-player')} exact=${await mission.getAttribute(
-      'data-mission-player-position',
-    )} target=${await mission.getAttribute(
-      'data-mission-target',
-    )} label=${await mission.getAttribute('data-mission-target-label')} cell=${await mission.getAttribute(
-      'data-mission-target-cell',
-    )} face=${await mission.getAttribute('data-mission-target-face')} selected=${await mission.getAttribute(
-      'data-mission-selected',
-    )} action=${await mission.getAttribute('data-mission-action')} enabled=${await mission.getAttribute(
-      'data-mission-action-enabled',
-    )} recenter=${await mission.getAttribute('data-mission-recenter')} trail=${navigationTrail.join('|')}`,
-  );
 }
 
 async function approachAction(
@@ -353,7 +319,7 @@ async function approachAction(
         (!normalizedLabel || normalizedLabel.test(label ?? ''))
       );
     },
-    40,
+    52,
     detour,
   );
   await expect(mission).toHaveAttribute('data-mission-action', expectedAction);
@@ -447,11 +413,33 @@ async function placeAndInspectStructure(
 
 test.describe.configure({ mode: 'serial', retries: 0 });
 
-test('unified voxel mission completes boundary through structures using visible controls', async ({
-  page,
-  browserName,
-}) => {
+test.afterEach(async ({ browser }, testInfo) => {
+  const isolatedLongRoute =
+    testInfo.title === COORDINATE_ROUTE_TITLE || testInfo.title === CLASSROOM_ROUTE_TITLE;
+  if (!isolatedLongRoute && testInfo.status === testInfo.expectedStatus) return;
+  // The mechanics config gives each tagged route its own project/worker. Long
+  // Chromium/WebKit traces can deadlock the already-empty context fixture, so
+  // close that isolated worker after success or failure while preserving the
+  // route's primary result and attachments.
+  await browser.close({ reason: 'Isolated mechanics route cleanup.' });
+});
+
+test(COORDINATE_ROUTE_TITLE, async ({ page, browserName }, testInfo) => {
   test.setTimeout(900_000);
+  const routeStartedAt = Date.now();
+  let previousStageAt = routeStartedAt;
+  const stageTimings: Array<{ stage: string; durationMs: number; elapsedMs: number }> = [];
+  const markStage = (stage: string) => {
+    const now = Date.now();
+    const timing = {
+      stage,
+      durationMs: now - previousStageAt,
+      elapsedMs: now - routeStartedAt,
+    };
+    stageTimings.push(timing);
+    testInfo.annotations.push({ type: 'stage-timing', description: JSON.stringify(timing) });
+    previousStageAt = now;
+  };
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   const apiRequests: string[] = [];
@@ -469,6 +457,9 @@ test('unified voxel mission completes boundary through structures using visible 
 
   await page.setViewportSize({ width: 1024, height: browserName === 'webkit' ? 680 : 768 });
   await page.goto('/?proof=mission');
+  if (process.env.MECHANICS_CLEANUP_PROBE === '1') {
+    throw new Error('EXPECTED_MECHANICS_CLEANUP_PROBE');
+  }
 
   const mission = page.locator('main.voxel-mission');
   const recenter = page.getByRole('button', { name: 'RECENTER' });
@@ -477,6 +468,12 @@ test('unified voxel mission completes boundary through structures using visible 
   await expect(mission).toHaveAttribute('data-mission-score', '0');
   await expect(mission).toHaveAttribute('data-mission-storage-writes', '0');
   await expect(mission).toHaveAttribute('data-mission-api-requests', '0');
+  await nudgeMissionCrosshair(page, 0);
+  const canvasDragLookUsed = true;
+  testInfo.annotations.push({ type: 'visible-canvas-drag-look', description: 'true' });
+  await recenter.click();
+  await expect(page.locator('.voxel-proof-target-label')).toContainText(/CELL WALL PANELS SUPPLY/i);
+  await expect(action).toBeEnabled();
   await capture(page, images, '01-empty-chamber-wall-objective.png');
 
   const playerBeforePause = await mission.getAttribute('data-mission-player');
@@ -501,6 +498,7 @@ test('unified voxel mission completes boundary through structures using visible 
     '6',
   );
   await capture(page, images, '02-wall-stack-collected.png');
+  markStage('opening-and-wall-supply');
 
   for (let index = 0; index < 6; index += 1) {
     await approachAction(
@@ -591,6 +589,7 @@ test('unified voxel mission completes boundary through structures using visible 
   await action.click();
   await expect(mission).toHaveAttribute('data-mission-cytoplasm-evidence', 'true');
   await capture(page, images, '06-full-height-non-solid-cytoplasm.png');
+  markStage('boundary-and-cytoplasm');
 
   await mineAndCollect(
     page,
@@ -620,6 +619,7 @@ test('unified voxel mission completes boundary through structures using visible 
     /RIBOSOMES · INSPECT/,
   );
   await capture(page, images, '07-nucleus-and-ribosomes-evidence.png');
+  markStage('genetic-information-and-protein');
 
   await mineAndCollect(
     page,
@@ -656,6 +656,7 @@ test('unified voxel mission completes boundary through structures using visible 
     /CHLOROPLASTS · INSPECT/,
   );
   await capture(page, images, '08-mitochondria-and-chloroplasts-evidence.png');
+  markStage('energy-and-photosynthesis');
 
   await mineAndCollect(
     page,
@@ -675,7 +676,7 @@ test('unified voxel mission completes boundary through structures using visible 
   );
   const currentWaypoint = await mission.getAttribute('data-mission-recenter');
   const waypointDistanceBefore = horizontalDistance(playerBeforeVacuoleRecenter, currentWaypoint);
-  await holdJoystick(page, 'forward', 220);
+  await moveMission(page, 'forward', 220);
   const waypointDistanceAfter = horizontalDistance(
     await mission.getAttribute('data-mission-player-position'),
     currentWaypoint,
@@ -737,6 +738,7 @@ test('unified voxel mission completes boundary through structures using visible 
   await expect(mission).toHaveAttribute('data-mission-centralvacuole-evidence', 'true');
   await expect(mission).toHaveAttribute('data-mission-score', '80');
   await capture(page, images, '13-vacuole-reinspected-score-restored.png');
+  markStage('vacuole-correction-and-restoration');
 
   const databases = await page.evaluate(async () =>
     typeof indexedDB.databases === 'function'
@@ -753,6 +755,10 @@ test('unified voxel mission completes boundary through structures using visible 
   expect(apiRequests).toEqual([]);
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
+  await testInfo.attach('mechanics-stage-timings', {
+    body: Buffer.from(`${JSON.stringify(stageTimings, null, 2)}\n`, 'utf8'),
+    contentType: 'application/json',
+  });
 
   if (evidenceRoot) {
     expect(images.map(({ file }) => file)).toEqual(EXPECTED_EVIDENCE_FILES);
@@ -774,6 +780,7 @@ test('unified voxel mission completes boundary through structures using visible 
           screenshots: images,
           semanticGates: {
             visibleControlsOnly: true,
+            canvasDragLookUsed,
             offTargetMutation,
             pauseClearedInput: true,
             invalidPlacementConservedState: true,
@@ -796,7 +803,7 @@ test('unified voxel mission completes boundary through structures using visible 
   }
 });
 
-test('unified voxel mission latches graphics loss and rejects later visible input', async ({
+test('@mechanics-context-loss unified voxel mission latches graphics loss and rejects later visible input', async ({
   page,
   browserName,
 }) => {
@@ -932,10 +939,7 @@ async function completeClassroomTutorial(
   await expect(page.getByRole('button', { name: 'Start mission and timer' })).toBeEnabled();
 }
 
-test('integrated classroom route reaches one queued immutable 100 percent result through visible controls', async ({
-  page,
-  browserName,
-}) => {
+test(CLASSROOM_ROUTE_TITLE, async ({ page, browserName }) => {
   test.setTimeout(900_000);
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
