@@ -40,8 +40,12 @@ import {
 import { resolveMissionPresentation, type MissionRuntimePresentation } from './missionPresentation';
 import { BOUNDARY_SECTORS, nextBoundarySector, type BoundaryLayer } from '../voxel/boundaryAdapter';
 import {
+  isMissionPlacementViewpointReached,
+  MISSION_CENTRAL_VACUOLE_SIDE_WAYPOINT,
+  MISSION_PLACEMENT_VIEW_WAYPOINTS,
   MISSION_RECOMMENDED_PREFAB_ANCHORS,
   MISSION_STRUCTURE_ORDER,
+  MISSION_WAYPOINT_REACHED_DISTANCE,
 } from '../voxel/missionDefinition';
 import {
   activeMissionSupplies,
@@ -67,17 +71,7 @@ const EYE_HEIGHT = 1.7;
 const PLAYER_SPEED = 3.5;
 const TARGET_INTERVAL = 0.08;
 const SNAPSHOT_INTERVAL = 0.12;
-const WAYPOINT_REACHED_DISTANCE = 0.85;
 const INTERIOR_ENTRY_WAYPOINT = { x: 3, y: 1, z: 1 } as const;
-const INTERIOR_PLACEMENT_WAYPOINTS: Readonly<
-  Record<Exclude<PlaceableStructureId, 'centralVacuole'>, VoxelPoint>
-> = {
-  nucleus: { x: -3, y: 1, z: 1.2 },
-  ribosomes: { x: -3, y: 1, z: 1.2 },
-  mitochondria: { x: 0, y: 1, z: 1.2 },
-  chloroplasts: { x: 3, y: 1, z: 1.2 },
-};
-const CENTRAL_VACUOLE_SIDE_WAYPOINT = { x: 3, y: 1, z: -2 } as const;
 type PlacementNavigationStage = 'entry' | 'placement-view' | 'central-side';
 const PLANT_INDICATOR_POSITION = { x: -6, y: 0, z: 4 } as const;
 const MISSION_MODULE_IDS_FOR_HOTBAR: Partial<Record<string, MissionModuleId>> = {
@@ -1483,10 +1477,11 @@ export class VoxelMissionScene {
       }
       return;
     }
-    if (
-      Math.hypot(snapshot.player.x - navigation.target.x, snapshot.player.z - navigation.target.z) >
-      WAYPOINT_REACHED_DISTANCE
-    ) {
+    const floorTarget =
+      navigation.stage === 'entry'
+        ? undefined
+        : MISSION_RECOMMENDED_PREFAB_ANCHORS[navigation.structureId];
+    if (!isMissionPlacementViewpointReached(snapshot.player, navigation.target, floorTarget)) {
       return;
     }
     if (navigation.stage === 'entry') this.interiorEntryReadyFor = selected;
@@ -1667,10 +1662,7 @@ export class VoxelMissionScene {
       const anchor = MISSION_RECOMMENDED_PREFAB_ANCHORS[selected];
       const player = snapshot.player;
       if (this.interiorEntryReadyFor !== selected) {
-        if (
-          Math.hypot(player.x - INTERIOR_ENTRY_WAYPOINT.x, player.z - INTERIOR_ENTRY_WAYPOINT.z) >
-          WAYPOINT_REACHED_DISTANCE
-        ) {
+        if (!isMissionPlacementViewpointReached(player, INTERIOR_ENTRY_WAYPOINT)) {
           this.interiorRouteReadyFor = null;
           return this.beginPlacementNavigation(
             selected,
@@ -1684,21 +1676,18 @@ export class VoxelMissionScene {
       if (selected === 'centralVacuole') {
         this.interiorRouteReadyFor = null;
         if (
-          Math.hypot(
-            player.x - CENTRAL_VACUOLE_SIDE_WAYPOINT.x,
-            player.z - CENTRAL_VACUOLE_SIDE_WAYPOINT.z,
-          ) > WAYPOINT_REACHED_DISTANCE
+          !isMissionPlacementViewpointReached(player, MISSION_CENTRAL_VACUOLE_SIDE_WAYPOINT, anchor)
         ) {
           return this.beginPlacementNavigation(
             selected,
             'central-side',
-            CENTRAL_VACUOLE_SIDE_WAYPOINT,
+            MISSION_CENTRAL_VACUOLE_SIDE_WAYPOINT,
             'CENTRAL VACUOLE SIDE VIEW · WALK FORWARD',
           );
         }
       } else if (this.interiorRouteReadyFor !== selected) {
-        const waypoint = INTERIOR_PLACEMENT_WAYPOINTS[selected];
-        if (Math.hypot(player.x - waypoint.x, player.z - waypoint.z) > WAYPOINT_REACHED_DISTANCE) {
+        const waypoint = MISSION_PLACEMENT_VIEW_WAYPOINTS[selected];
+        if (!isMissionPlacementViewpointReached(player, waypoint, anchor)) {
           return this.beginPlacementNavigation(
             selected,
             'placement-view',
@@ -1739,7 +1728,7 @@ export class VoxelMissionScene {
       if (
         insideChamber &&
         Math.hypot(player.x - INTERIOR_ENTRY_WAYPOINT.x, player.z - INTERIOR_ENTRY_WAYPOINT.z) >
-          WAYPOINT_REACHED_DISTANCE
+          MISSION_WAYPOINT_REACHED_DISTANCE
       ) {
         return { ...INTERIOR_ENTRY_WAYPOINT };
       }
@@ -1820,8 +1809,8 @@ export class VoxelMissionScene {
       this.lastRecenterStage =
         target.x === INTERIOR_ENTRY_WAYPOINT.x && target.z === INTERIOR_ENTRY_WAYPOINT.z
           ? 'central-entry'
-          : target.x === CENTRAL_VACUOLE_SIDE_WAYPOINT.x &&
-              target.z === CENTRAL_VACUOLE_SIDE_WAYPOINT.z
+          : target.x === MISSION_CENTRAL_VACUOLE_SIDE_WAYPOINT.x &&
+              target.z === MISSION_CENTRAL_VACUOLE_SIDE_WAYPOINT.z
             ? 'central-side'
             : 'central-anchor';
     } else {

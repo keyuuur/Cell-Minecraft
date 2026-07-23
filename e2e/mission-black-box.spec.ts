@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import {
   completeVisibleTouchTutorial,
   mineAndCollectVisibleSupply,
@@ -6,9 +6,80 @@ import {
   placeAndInspectVisibleStructure,
 } from './helpers/visibleStudentControls';
 
-const RELEASE_CONTEXT_LOSS_SENTINEL = '__RELEASE_WEBGL_CONTEXT_LOST__';
+const RELEASE_CONTEXT_LOSS_ATTRIBUTE = 'data-release-webgl-context-losses';
+const RELEASE_CONTEXT_LOSS_STOP_EVENT = 'release-audit-stop-context-loss-observer';
+
+async function installReleaseContextLossObserver(page: Page): Promise<void> {
+  await page.addInitScript(
+    ({ attribute, stopEvent }) => {
+      const controller = new AbortController();
+      let losses = 0;
+      const reflectLosses = () => document.documentElement?.setAttribute(attribute, String(losses));
+      reflectLosses();
+      document.addEventListener('readystatechange', reflectLosses, {
+        signal: controller.signal,
+      });
+      window.addEventListener(
+        'webglcontextlost',
+        () => {
+          losses += 1;
+          reflectLosses();
+        },
+        { capture: true, signal: controller.signal },
+      );
+      window.addEventListener(stopEvent, () => controller.abort(), {
+        once: true,
+        signal: controller.signal,
+      });
+    },
+    {
+      attribute: RELEASE_CONTEXT_LOSS_ATTRIBUTE,
+      stopEvent: RELEASE_CONTEXT_LOSS_STOP_EVENT,
+    },
+  );
+}
+
+async function assertAndStopReleaseContextLossObserver(page: Page): Promise<void> {
+  const root = page.locator('html');
+  await expect(root).toHaveAttribute(RELEASE_CONTEXT_LOSS_ATTRIBUTE, '0');
+  await root.dispatchEvent(RELEASE_CONTEXT_LOSS_STOP_EVENT, { bubbles: true });
+}
 
 test.describe.configure({ mode: 'serial', retries: 0, timeout: 900_000 });
+
+test.afterEach(async ({ browser }, testInfo) => {
+  if (!testInfo.title.startsWith('@release-blackbox ')) return;
+  // This route must remain last in the serial file/project. Direct page closure
+  // is asserted in the body; closing the worker browser then bypasses a proven
+  // Playwright Chromium deadlock while closing its already-empty context fixture.
+  await browser.close({ reason: 'Release black-box route finished.' });
+});
+
+test('@release-lifecycle closes a live Standard WebGL mission', async ({ page }) => {
+  test.setTimeout(120_000);
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  await installReleaseContextLossObserver(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/');
+  await page.getByLabel('First name').fill('Lifecycle');
+  await page.getByLabel('Last initial').fill('L');
+  await page.getByLabel('Class period').selectOption('4');
+  await page.getByRole('button', { name: 'Continue to controls' }).click();
+  await page.getByRole('radio', { name: /Touch Only/ }).click();
+  await page.getByRole('radio', { name: /^Standard/ }).click();
+  await completeVisibleTouchTutorial(page);
+  await page.getByRole('button', { name: 'Start mission and timer' }).click();
+  await expect(page.locator('main.voxel-mission')).toBeVisible({ timeout: 30_000 });
+  await assertAndStopReleaseContextLossObserver(page);
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+  await page.close({ runBeforeUnload: false });
+});
 
 test('@release-blackbox completes the visible student mission at 100 percent', async ({
   page,
@@ -29,28 +100,12 @@ test('@release-blackbox completes the visible student mission at 100 percent', a
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   const babylonRequestsBeforeStart: string[] = [];
-  let graphicsContextLosses = 0;
   let missionStarted = false;
 
-  await page.addInitScript((sentinel) => {
-    window.addEventListener(
-      'webglcontextlost',
-      () => {
-        // A one-way console signal avoids a Playwright binding round trip while
-        // Chromium is destroying the context. The latter can deadlock context.close().
-        console.error(sentinel);
-      },
-      true,
-    );
-  }, RELEASE_CONTEXT_LOSS_SENTINEL);
+  await installReleaseContextLossObserver(page);
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('console', (message) => {
-    if (message.type() !== 'error') return;
-    if (message.text() === RELEASE_CONTEXT_LOSS_SENTINEL) {
-      graphicsContextLosses += 1;
-      return;
-    }
-    consoleErrors.push(message.text());
+    if (message.type() === 'error') consoleErrors.push(message.text());
   });
   page.on('request', (request) => {
     if (missionStarted) return;
@@ -83,6 +138,9 @@ test('@release-blackbox completes the visible student mission at 100 percent', a
   missionStarted = true;
   await page.getByRole('button', { name: 'Start mission and timer' }).click();
   await expect(page.locator('main.voxel-mission')).toBeVisible({ timeout: 30_000 });
+  if (process.env.RELEASE_BLACKBOX_CLEANUP_PROBE === '1') {
+    throw new Error('EXPECTED_RELEASE_BLACKBOX_CLEANUP_PROBE');
+  }
   markStage('identification-and-tutorial');
 
   await mineAndCollectVisibleSupply(page, 'Cell wall panels');
@@ -221,7 +279,7 @@ test('@release-blackbox completes the visible student mission at 100 percent', a
     contentType: 'application/json',
   });
 
-  expect(graphicsContextLosses).toBe(0);
+  await assertAndStopReleaseContextLossObserver(page);
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
   await page.close({ runBeforeUnload: false });

@@ -17,6 +17,14 @@ for (const file of files) {
   for (const [label, pattern] of forbidden) {
     if (pattern.test(source)) throw new Error(`BLACK_BOX_BOUNDARY_VIOLATION:${file}:${label}`);
   }
+
+  if (file === 'e2e/mission-black-box.spec.ts') {
+    const declaredTests = [...source.matchAll(/\ntest\('/g)].map((match) => match.index ?? -1);
+    const releaseRoute = source.indexOf("test('@release-blackbox ");
+    if (releaseRoute < 0 || declaredTests.at(-1) !== releaseRoute - 1) {
+      throw new Error('BLACK_BOX_ROUTE_MUST_REMAIN_LAST_FOR_WORKER_BROWSER_CLEANUP');
+    }
+  }
 }
 
 process.stdout.write(`Verified visible-only black-box boundary across ${files.length} files.\n`);
